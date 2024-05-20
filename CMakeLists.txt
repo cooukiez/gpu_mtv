@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8)
 
-project(mesh_loader)
+project(gpu_mtv)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,10 +53,13 @@ endif()
 add_custom_target(vert.spv
         COMMAND glslangValidator --quiet -V ${CMAKE_SOURCE_DIR}/shader.vert -o ${CMAKE_BINARY_DIR}/vert.spv)
 
+add_custom_target(geom.spv
+        COMMAND glslangValidator --quiet -V ${CMAKE_SOURCE_DIR}/shader.geom -o ${CMAKE_BINARY_DIR}/geom.spv)
+
 add_custom_target(frag.spv
         COMMAND glslangValidator --quiet -V ${CMAKE_SOURCE_DIR}/shader.frag -o ${CMAKE_BINARY_DIR}/frag.spv)
 
-add_dependencies(main vert.spv frag.spv)
+add_dependencies(main vert.spv geom.spv frag.spv)
 
 file(COPY ${CMAKE_SOURCE_DIR}/textures DESTINATION ${CMAKE_BINARY_DIR})
 file(COPY ${CMAKE_SOURCE_DIR}/models DESTINATION ${CMAKE_BINARY_DIR})

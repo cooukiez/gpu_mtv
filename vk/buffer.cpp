@@ -49,6 +49,9 @@ VCW_Buffer App::create_buf(const VkDeviceSize size, const VkBufferUsageFlags usa
 
 void App::map_buf(VCW_Buffer *p_buf) const {
     vkMapMemory(dev, p_buf->mem, 0, p_buf->size, 0, &p_buf->p_mapped_mem);
+
+    if (p_buf->p_mapped_mem == nullptr)
+        throw std::runtime_error("failed to map buffer memory.");
 }
 
 void App::unmap_buf(VCW_Buffer *p_buf) const {
@@ -57,15 +60,27 @@ void App::unmap_buf(VCW_Buffer *p_buf) const {
 }
 
 void App::cp_data_to_buf(VCW_Buffer *p_buf, const void *p_data) const {
+    if (p_buf == nullptr || p_data == nullptr)
+        throw std::invalid_argument("cannot copy data from buffer, argument is nullptr.");
+
     map_buf(p_buf);
     memcpy(p_buf->p_mapped_mem, p_data, p_buf->size);
+    unmap_buf(p_buf);
+}
+
+void App::cp_data_from_buf(VCW_Buffer *p_buf, void *p_data) const {
+    if (p_buf == nullptr || p_data == nullptr)
+        throw std::invalid_argument("cannot copy data from buffer, argument is nullptr.");
+
+    map_buf(p_buf);
+    memcpy(p_data, p_buf->p_mapped_mem, p_buf->size);
     unmap_buf(p_buf);
 }
 
 // allocates new command buffers
 void App::cp_buf(const VCW_Buffer &src_buf, const VCW_Buffer &dst_buf) {
     if (src_buf.size != dst_buf.size)
-        throw std::runtime_error("source buffer size is not destination buffer size.");
+        throw std::invalid_argument("src buffer size is not equal to dst buffer size.");
 
     VkCommandBuffer cmd_buf = begin_single_time_cmd();
 

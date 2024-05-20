@@ -10,8 +10,6 @@
 #include "prop.h"
 #include "util.h"
 
-#include "render/camera.h"
-
 #include <tiny_obj_loader.h>
 
 //
@@ -56,14 +54,16 @@ struct Vertex {
 
     static std::array<VkVertexInputAttributeDescription, 5> get_attrib_descs();
 
-    bool operator==(const Vertex& other) const {
+    bool operator==(const Vertex &other) const {
         return pos == other.pos && normal == other.normal && uv == other.uv;
     }
 };
 
-template<> struct std::hash<Vertex> {
-    size_t operator()(Vertex const& vertex) const noexcept {
-        return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^ (hash<glm::vec2>()(vertex.uv) << 1);
+template<>
+struct std::hash<Vertex> {
+    size_t operator()(Vertex const &vertex) const noexcept {
+        return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^ (
+                   hash<glm::vec2>()(vertex.uv) << 1);
     }
 };
 
@@ -74,8 +74,13 @@ struct VCW_PushConstants {
 };
 
 struct VCW_Uniform {
+    glm::vec4 min_vert;
+    glm::vec4 max_vert;
     uint32_t use_textures;
     float shadow_attenuation;
+
+    float min_z;
+    float max_z;
 };
 
 struct VCW_Buffer {
@@ -99,10 +104,42 @@ struct VCW_Image {
     VkImageLayout cur_layout;
 };
 
+struct VCW_OrthographicChunkModule {
+    glm::mat4 proj;
+
+    glm::vec3 min_coord;
+    glm::vec3 max_coord;
+    float total_pane_count;
+
+    glm::vec3 chunk_space;
+    float thickness;
+
+    float z_near;
+    float z_far;
+
+    void init() {
+        chunk_space = max_coord - min_coord;
+        // thickness = chunk_space.z / total_pane_count;
+
+        z_near = min_coord.z;
+        z_far = min_coord.z;
+
+        proj = glm::ortho(min_coord.x, max_coord.x, min_coord.y, max_coord.y, z_near, z_far);
+    }
+
+    void update_proj(const uint32_t pane_index) {
+        const float slicing_pane_z = min_coord.z + thickness * static_cast<float>(pane_index);
+
+        z_near = slicing_pane_z - thickness / 2.0f;
+        z_far = slicing_pane_z + thickness / 2.0f;
+
+        proj = glm::ortho(min_coord.x, max_coord.x, min_coord.y, max_coord.y, z_near, z_far);
+    }
+};
+
 struct VCW_RenderStats {
     double frame_time;
     double gpu_frame_time;
-    double blit_img_time;
     uint32_t frame_count;
 };
 
@@ -111,7 +148,7 @@ public:
     void run() {
         init_window();
         init_app();
-        render_loop();
+        comp_vox_grid();
         clean_up();
     }
 
@@ -174,6 +211,10 @@ public:
     int indices_count;
     VCW_Buffer index_buf;
 
+    VCW_Image render_target;
+    std::array<VCW_Image, CHUNK_SIDE_LENGTH> render_img_views;
+    VCW_Buffer transfer_buf;
+
     VkQueryPool query_pool;
     uint32_t frame_query_count;
 
@@ -190,7 +231,7 @@ public:
     VCW_RenderStats stats;
     VCW_RenderStats readable_stats;
 
-    VCW_Camera cam;
+    VCW_OrthographicChunkModule pane_module;
 
     //
     //
@@ -201,7 +242,7 @@ public:
 
     void init_app();
 
-    void render_loop();
+    void comp_vox_grid();
 
     void clean_up();
 
@@ -222,8 +263,6 @@ public:
     void create_inst();
 
     void setup_debug_msg();
-
-    void init_imgui() const;
 
     //
     //
@@ -264,8 +303,6 @@ public:
 
     void create_swap();
 
-    void recreate_swap();
-
     void clean_up_swap();
 
     //
@@ -281,6 +318,8 @@ public:
 
     void cp_data_to_buf(VCW_Buffer *p_buf, const void *p_data) const;
 
+    void cp_data_from_buf(VCW_Buffer *p_buf, void *p_data) const;
+
     void cp_buf(const VCW_Buffer &src_buf, const VCW_Buffer &dst_buf);
 
     void clean_up_buf(const VCW_Buffer &buf) const;
@@ -295,10 +334,19 @@ public:
 
     static bool has_stencil_component(VkFormat format);
 
-    VCW_Image create_img(VkExtent2D extent, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage,
-                         VkMemoryPropertyFlags mem_props) const;
+    VCW_Image create_img(VkExtent2D extent, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags mem_props,
+                         VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL) const;
 
-    void create_img_view(VCW_Image *p_img, VkImageAspectFlags aspect_flags) const;
+    VCW_Image create_img(VkExtent3D extent, VkFormat format, VkImageUsageFlags usage, VkMemoryPropertyFlags mem_props,
+                         VkImageTiling tiling = VK_IMAGE_TILING_OPTIMAL, VkImageType img_type = VK_IMAGE_TYPE_2D) const;
+
+    VkImageView get_img_view(VCW_Image img, VkImageViewType img_view_type = VK_IMAGE_VIEW_TYPE_2D,
+                             const VkImageSubresourceRange &subres_range = DEFAULT_SUBRESOURCE_RANGE) const;
+
+    void create_img_view(VCW_Image *p_img, VkImageViewType img_view_type = VK_IMAGE_VIEW_TYPE_2D,
+                         const VkImageSubresourceRange &subres_range = DEFAULT_SUBRESOURCE_RANGE) const;
+
+    void create_img_view(VCW_Image *p_img, VkImageAspectFlags aspect_flags = 0) const;
 
     VkSampler create_sampler(VkFilter filter, VkSamplerAddressMode address_mode) const;
 
@@ -309,10 +357,17 @@ public:
     static void transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, VkImageLayout layout,
                                       VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage);
 
+    static void cp_buf_to_img(VkCommandBuffer cmd_buf, const VCW_Buffer &buf, const VCW_Image &img, VkExtent3D extent);
+
     static void cp_buf_to_img(VkCommandBuffer cmd_buf, const VCW_Buffer &buf, const VCW_Image &img, VkExtent2D extent);
 
+    static void cp_img_to_buf(VkCommandBuffer cmd_buf, const VCW_Image &img, const VCW_Buffer &buf, VkExtent3D extent);
+
+    static void cp_img_to_buf(VkCommandBuffer cmd_buf, const VCW_Image &img, const VCW_Buffer &buf, VkExtent2D extent);
+
     static void
-    blit_img(VkCommandBuffer cmd_buf, const VCW_Image &src, VkExtent3D src_extent, const VCW_Image &dst, VkExtent3D dst_extent,
+    blit_img(VkCommandBuffer cmd_buf, const VCW_Image &src, VkExtent3D src_extent, const VCW_Image &dst,
+             VkExtent3D dst_extent,
              VkFilter filter);
 
     static void blit_img(VkCommandBuffer cmd_buf, const VCW_Image &src, const VCW_Image &dst, VkFilter filter);
@@ -330,13 +385,17 @@ public:
 
     void create_desc_pool(uint32_t max_sets);
 
-    void write_buf_desc_binding(const VCW_Buffer &buf, uint32_t dst_set, uint32_t dst_binding, VkDescriptorType desc_type) const;
+    void write_buf_desc_binding(const VCW_Buffer &buf, uint32_t dst_set, uint32_t dst_binding,
+                                VkDescriptorType desc_type) const;
 
-    void write_img_desc_binding(const VCW_Image &img, uint32_t dst_set, uint32_t dst_binding, VkDescriptorType desc_type) const;
+    void write_img_desc_binding(const VCW_Image &img, uint32_t dst_set, uint32_t dst_binding,
+                                VkDescriptorType desc_type,
+                                VkImageLayout img_layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) const;
 
     void write_sampler_desc_binding(VkSampler sampler, uint32_t dst_set, uint32_t dst_binding) const;
 
-    void write_img_desc_array(const std::vector<VCW_Image> &imgs, uint32_t dst_set, uint32_t dst_binding, VkDescriptorType desc_type) const;
+    void write_img_desc_array(const std::vector<VCW_Image> &imgs, uint32_t dst_set, uint32_t dst_binding,
+                              VkDescriptorType desc_type) const;
 
     void clean_up_desc() const;
 
@@ -346,8 +405,6 @@ public:
     void create_rendp();
 
     VkShaderModule create_shader_mod(const std::vector<char> &code) const;
-
-    void create_render_targets();
 
     void create_frame_bufs(const std::vector<VCW_Image> &img_targets);
 
@@ -392,6 +449,8 @@ public:
 
     void create_depth_resources();
 
+    void create_render_target();
+
     void create_desc_pool_layout();
 
     void create_pipe();
@@ -400,7 +459,7 @@ public:
 
     void update_bufs(uint32_t index_inflight_frame);
 
-    void record_cmd_buf(VkCommandBuffer cmd_buf, uint32_t img_index) const;
+    void record_cmd_buf(VkCommandBuffer cmd_buf, uint32_t img_index);
 
     void fetch_queries(uint32_t img_index);
 };

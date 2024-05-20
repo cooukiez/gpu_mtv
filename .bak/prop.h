@@ -1,0 +1,55 @@
+//
+// Created by Ludw on 4/25/2024.
+//
+
+#ifndef VCW_PROP_H
+#define VCW_PROP_H
+
+#define WINDOW_TITLE "GPU Mesh to Voxel"
+
+#define INITIAL_WIDTH 800
+#define INITIAL_HEIGHT 600
+
+#define MAX_FRAMES_IN_FLIGHT 2
+
+#define APP_NAME "GPU Mesh to Voxel"
+#define ENGINE_NAME "No Engine"
+
+// #define VERBOSE
+#define VALIDATION
+
+const std::vector<const char *> val_layers = {
+        "VK_LAYER_KHRONOS_validation"
+};
+
+const std::vector<const char *> dev_exts = {
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME
+        // VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME // not required anymore
+};
+
+const VkFormat PREFERRED_FORMAT = VK_FORMAT_B8G8R8A8_SRGB;
+const VkColorSpaceKHR PREFERRED_COLOR_SPACE = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+const VkPresentModeKHR PREFERRED_PRES_MODE = VK_PRESENT_MODE_FIFO_KHR;
+const VkCompositeAlphaFlagBitsKHR PREFERRED_COMPOSITE_ALPHA = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+const VkImageUsageFlags SWAP_IMG_USAGE = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+const VkComponentMapping DEFAULT_COMPONENT_MAPPING = {.r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY};
+const VkImageSubresourceRange DEFAULT_SUBRESOURCE_RANGE = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
+const VkImageSubresourceLayers DEFAULT_SUBRESOURCE_LAYERS = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
+const VkBorderColor DEFAULT_SAMPLER_BORDER_COLOR = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
+
+// Rasterization Stage
+const VkBool32 DEPTH_CLAMP_ENABLE = VK_FALSE;
+const VkBool32 RASTERIZER_DISCARD_ENABLE = VK_FALSE;
+const VkPolygonMode POLYGON_MODE = VK_POLYGON_MODE_FILL;
+const VkCullModeFlags CULL_MODE = VK_CULL_MODE_NONE;
+const VkFrontFace FRONT_FACE = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+
+// #define BIND_SAMPLE_TEXTURE
+
+const VkShaderStageFlags PUSH_CONSTANTS_STAGE = VK_SHADER_STAGE_ALL_GRAPHICS;
+
+#define CHUNK_SIDE_LENGTH 256
+#define CHUNK_SIZE (CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH)
+
+#endif //VCW_PROP_H

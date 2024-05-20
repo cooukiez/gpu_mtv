@@ -31,18 +31,23 @@ bool App::has_stencil_component(const VkFormat format) {
     return format == VK_FORMAT_D32_SFLOAT_S8_UINT || format == VK_FORMAT_D24_UNORM_S8_UINT;
 }
 
-VCW_Image App::create_img(const VkExtent2D extent, const VkFormat format, const VkImageTiling tiling,
-                          const VkImageUsageFlags usage, const VkMemoryPropertyFlags mem_props) const {
+VCW_Image App::create_img(const VkExtent2D extent, const VkFormat format, const VkImageUsageFlags usage,
+                          const VkMemoryPropertyFlags mem_props, const VkImageTiling tiling) const {
+    VkExtent3D extent_3d = {extent.width, extent.height, 1};
+    return create_img(extent_3d, format, usage, mem_props, tiling, VK_IMAGE_TYPE_2D);
+}
+
+VCW_Image App::create_img(const VkExtent3D extent, const VkFormat format, const VkImageUsageFlags usage,
+                          const VkMemoryPropertyFlags mem_props, const VkImageTiling tiling,
+                          const VkImageType img_type) const {
     VCW_Image img{};
     img.format = format;
     img.cur_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-    img.extent.width = extent.width;
-    img.extent.height = extent.height;
-    img.extent.depth = 1;
+    img.extent = extent;
 
     VkImageCreateInfo img_info{};
     img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    img_info.imageType = VK_IMAGE_TYPE_2D;
+    img_info.imageType = img_type;
     img_info.extent = img.extent;
     img_info.mipLevels = 1;
     img_info.arrayLayers = 1;
@@ -72,17 +77,32 @@ VCW_Image App::create_img(const VkExtent2D extent, const VkFormat format, const 
     return img;
 }
 
-void App::create_img_view(VCW_Image *p_img, const VkImageAspectFlags aspect_flags) const {
+VkImageView App::get_img_view(const VCW_Image img, const VkImageViewType img_view_type,
+                              const VkImageSubresourceRange &subres_range) const {
     VkImageViewCreateInfo view_info{};
     view_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    view_info.image = p_img->img;
-    view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    view_info.format = p_img->format;
-    view_info.subresourceRange = DEFAULT_SUBRESOURCE_RANGE;
-    view_info.subresourceRange.aspectMask = aspect_flags;
+    view_info.image = img.img;
+    view_info.viewType = img_view_type;
+    view_info.format = img.format;
+    view_info.subresourceRange = subres_range;
 
-    if (vkCreateImageView(dev, &view_info, nullptr, &p_img->view) != VK_SUCCESS)
+    VkImageView view;
+    if (vkCreateImageView(dev, &view_info, nullptr, &view) != VK_SUCCESS)
         throw std::runtime_error("failed to create image view.");
+
+    return view;
+}
+
+void App::create_img_view(VCW_Image *p_img, const VkImageViewType img_view_type,
+                          const VkImageSubresourceRange &subres_range) const {
+    p_img->view = get_img_view(*p_img, img_view_type, subres_range);
+}
+
+void App::create_img_view(VCW_Image *p_img, const VkImageAspectFlags aspect_flags) const {
+    VkImageSubresourceRange subres_range = DEFAULT_SUBRESOURCE_RANGE;
+    subres_range.aspectMask = aspect_flags;
+
+    create_img_view(p_img, VK_IMAGE_VIEW_TYPE_2D, subres_range);
 }
 
 VkSampler App::create_sampler(const VkFilter filter, const VkSamplerAddressMode address_mode) const {
@@ -165,19 +185,40 @@ void App::transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, const
     p_img->cur_layout = layout;
 }
 
-void App::cp_buf_to_img(VkCommandBuffer cmd_buf, const VCW_Buffer &buf, const VCW_Image &img, const VkExtent2D extent) {
+void App::cp_buf_to_img(VkCommandBuffer cmd_buf, const VCW_Buffer &buf, const VCW_Image &img, const VkExtent3D extent) {
     VkBufferImageCopy region{};
     region.bufferOffset = 0;
     region.bufferRowLength = 0;
     region.bufferImageHeight = 0;
     region.imageSubresource = DEFAULT_SUBRESOURCE_LAYERS;
     region.imageOffset = {0, 0, 0};
-    region.imageExtent.width = extent.width;
-    region.imageExtent.height = extent.height;
-    region.imageExtent.depth = 1;
+    region.imageExtent = extent;
 
     vkCmdCopyBufferToImage(cmd_buf, buf.buf, img.img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
 }
+
+void App::cp_buf_to_img(VkCommandBuffer cmd_buf, const VCW_Buffer &buf, const VCW_Image &img, const VkExtent2D extent) {
+    const VkExtent3D extent_3d = {extent.width, extent.height, 1};
+    cp_buf_to_img(cmd_buf, buf, img, extent_3d);
+}
+
+void App::cp_img_to_buf(VkCommandBuffer cmd_buf, const VCW_Image &img, const VCW_Buffer &buf, const VkExtent3D extent) {
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource = DEFAULT_SUBRESOURCE_LAYERS;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = extent;
+
+    vkCmdCopyImageToBuffer(cmd_buf, img.img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, buf.buf, 1, &region);
+}
+
+void App::cp_img_to_buf(VkCommandBuffer cmd_buf, const VCW_Image &img, const VCW_Buffer &buf, const VkExtent2D extent) {
+    const VkExtent3D extent_3d = {extent.width, extent.height, 1};
+    cp_img_to_buf(cmd_buf, img, buf, extent_3d);
+}
+
 
 void App::blit_img(VkCommandBuffer cmd_buf, const VCW_Image &src, const VkExtent3D src_extent, const VCW_Image &dst,
                    const VkExtent3D dst_extent, const VkFilter filter) {

@@ -92,7 +92,8 @@ bool App::is_phy_dev_suitable(VkPhysicalDevice loc_phy_dev) const {
     VkPhysicalDeviceFeatures features;
     vkGetPhysicalDeviceFeatures(loc_phy_dev, &features);
 
-    return loc_qf_indices.is_complete() && exts_supported && swap_adequate && features.samplerAnisotropy;
+    return loc_qf_indices.is_complete() && exts_supported && swap_adequate
+           && features.samplerAnisotropy && features.geometryShader && features.fragmentStoresAndAtomics;
 }
 
 void App::pick_phy_dev() {
@@ -137,6 +138,8 @@ void App::create_dev() {
 
     VkPhysicalDeviceFeatures dev_features{};
     dev_features.samplerAnisotropy = VK_TRUE;
+    dev_features.geometryShader = VK_TRUE;
+    dev_features.fragmentStoresAndAtomics = VK_TRUE;
 
     VkDeviceCreateInfo dev_info{};
     dev_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;

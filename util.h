@@ -7,11 +7,10 @@
 #ifndef VCW_UTIL_H
 #define VCW_UTIL_H
 
-std::vector<char> read_file(const std::string &filename);
+template<typename T>
+std::vector<T> read_file(const std::string &filename);
 
-std::ostream &operator<<(std::ostream &os, const glm::vec3 &v);
-
-std::ostream &operator<<(std::ostream &os, const glm::vec4 &v);
+void write_file(const std::string &filename, const void *data, const std::streamsize size);
 
 float min_component(glm::vec3 v);
 

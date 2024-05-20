@@ -103,15 +103,7 @@ void App::render() {
     vkWaitForFences(dev, 1, &fens[cur_frame], VK_TRUE, UINT64_MAX);
 
     uint32_t img_index;
-    VkResult result = vkAcquireNextImageKHR(dev, swap, UINT64_MAX, img_avl_semps[cur_frame],
-                                            VK_NULL_HANDLE, &img_index);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-        recreate_swap();
-        return;
-    } else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
-        throw std::runtime_error("failed to acquire swap chain image.");
-    }
+    vkAcquireNextImageKHR(dev, swap, UINT64_MAX, img_avl_semps[cur_frame], VK_NULL_HANDLE, &img_index);
 
     update_bufs(cur_frame);
 
@@ -151,14 +143,7 @@ void App::render() {
 
     present.pImageIndices = &img_index;
 
-    result = vkQueuePresentKHR(q_pres, &present);
-
-    if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || resized) {
-        resized = false;
-        recreate_swap();
-    } else if (result != VK_SUCCESS) {
-        throw std::runtime_error("failed to present swap chain image.");
-    }
+    vkQueuePresentKHR(q_pres, &present);
 
     fetch_queries(img_index);
 

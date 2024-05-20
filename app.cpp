@@ -40,26 +40,23 @@ void App::init_app() {
 
     create_unif_bufs();
 
+    create_render_target();
+
     create_frame_bufs(swap_imgs);
 
     create_desc_pool_layout();
     create_pipe();
 
-    create_desc_pool(MAX_FRAMES_IN_FLIGHT + IMGUI_DESCRIPTOR_COUNT);
+    create_desc_pool(MAX_FRAMES_IN_FLIGHT);
     write_desc_pool();
 
     create_cmd_bufs();
     create_sync();
 
-    init_imgui();
-
     create_query_pool(2);
 
-    cam.create_default_cam(render_extent);
     const float largest_dim = max_component(max_vert_coord - min_vert_coord);
     std::cout << "largest scene dimension: " << largest_dim << std::endl;
-    cam.speed_fast = largest_dim / 100.0f;
-    cam.speed_slow = largest_dim / 500.0f;
 }
 
 void App::load_model() {
@@ -199,7 +196,7 @@ void App::create_textures() {
         stbi_image_free(pixels);
 
         const VkExtent2D extent = {static_cast<uint32_t>(tex_width), static_cast<uint32_t>(tex_height)};
-        VCW_Image tex_img = create_img(extent, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+        VCW_Image tex_img = create_img(extent, VK_FORMAT_R8G8B8A8_SRGB,
                                        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 
@@ -232,8 +229,8 @@ void App::create_textures_sampler() {
 void App::create_depth_resources() {
     const VkFormat depth_format = find_depth_format();
 
-    depth_img = create_img(swap_extent, depth_format, VK_IMAGE_TILING_OPTIMAL,
-                           VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+    depth_img = create_img(swap_extent, depth_format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
+                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
     create_img_view(&depth_img, VK_IMAGE_ASPECT_DEPTH_BIT);
 }
 
@@ -241,6 +238,8 @@ void App::create_unif_bufs() {
     if (!textures.empty())
         ubo.use_textures = true;
     ubo.shadow_attenuation = 0.5f;
+    ubo.min_vert = glm::vec4(min_vert_coord, 1.0f);
+    ubo.max_vert = glm::vec4(max_vert_coord, 1.0f);
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
     unif_bufs.resize(MAX_FRAMES_IN_FLIGHT);
@@ -251,6 +250,19 @@ void App::create_unif_bufs() {
 
         map_buf(&unif_bufs[i]);
     }
+}
+
+void App::create_render_target() {
+    VkExtent3D extent = {CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH};
+    render_target = create_img(extent, VK_FORMAT_R8G8B8A8_UNORM,
+                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                               VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_TYPE_3D);
+
+    create_img_view(&render_target, VK_IMAGE_VIEW_TYPE_3D, DEFAULT_SUBRESOURCE_RANGE);
+
+    VkDeviceSize size = CHUNK_SIZE * sizeof(glm::u8vec4);
+    transfer_buf = create_buf(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+                              VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
 
 void App::create_desc_pool_layout() {
@@ -286,6 +298,15 @@ void App::create_desc_pool_layout() {
     bindings.push_back(textures_layout_binding);
     last_binding++;
 
+    VkDescriptorSetLayoutBinding render_target_layout_binding{};
+    render_target_layout_binding.binding = last_binding;
+    render_target_layout_binding.descriptorCount = 1;
+    render_target_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    render_target_layout_binding.pImmutableSamplers = nullptr;
+    render_target_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    bindings.push_back(render_target_layout_binding);
+    last_binding++;
+
     for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; ++i) {
         add_desc_set_layout(static_cast<uint32_t>(bindings.size()), bindings.data());
     }
@@ -293,15 +314,17 @@ void App::create_desc_pool_layout() {
     add_pool_size(MAX_FRAMES_IN_FLIGHT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
     add_pool_size(MAX_FRAMES_IN_FLIGHT, VK_DESCRIPTOR_TYPE_SAMPLER);
     add_pool_size(MAX_FRAMES_IN_FLIGHT * DESCRIPTOR_TEXTURE_COUNT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
-    add_pool_size(IMGUI_DESCRIPTOR_COUNT, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER);
+    add_pool_size(MAX_FRAMES_IN_FLIGHT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 }
 
 void App::create_pipe() {
-    auto vert_code = read_file("vert.spv");
-    auto frag_code = read_file("frag.spv");
+    auto vert_code = read_file<char>("vert.spv");
+    auto frag_code = read_file<char>("frag.spv");
+    auto geom_code = read_file<char>("geom.spv");
 
     VkShaderModule vert_module = create_shader_mod(vert_code);
     VkShaderModule frag_module = create_shader_mod(frag_code);
+    VkShaderModule geom_module = create_shader_mod(geom_code);
 
     VkPipelineShaderStageCreateInfo vert_stage_info{};
     vert_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -315,7 +338,13 @@ void App::create_pipe() {
     frag_stage_info.module = frag_module;
     frag_stage_info.pName = "main";
 
-    VkPipelineShaderStageCreateInfo stages[] = {vert_stage_info, frag_stage_info};
+    VkPipelineShaderStageCreateInfo geom_stage_info{};
+    geom_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    geom_stage_info.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+    geom_stage_info.module = geom_module;
+    geom_stage_info.pName = "main";
+
+    std::array stages = {vert_stage_info, frag_stage_info, geom_stage_info};
 
     VkPipelineVertexInputStateCreateInfo vert_input_info{};
     vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -333,10 +362,11 @@ void App::create_pipe() {
     input_asm_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     input_asm_info.primitiveRestartEnable = VK_FALSE;
 
-    VkPipelineViewportStateCreateInfo viewport_info{};
-    viewport_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_info.viewportCount = 1;
-    viewport_info.scissorCount = 1;
+    VkPipelineRasterizationConservativeStateCreateInfoEXT conservative_raster_info{};
+    conservative_raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT;
+    conservative_raster_info.flags = 0;
+    conservative_raster_info.conservativeRasterizationMode = VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT;
+    conservative_raster_info.extraPrimitiveOverestimationSize = 1.5f;
 
     VkPipelineRasterizationStateCreateInfo raster_info{};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -347,6 +377,7 @@ void App::create_pipe() {
     raster_info.cullMode = CULL_MODE;
     raster_info.frontFace = FRONT_FACE;
     raster_info.depthBiasEnable = VK_FALSE;
+    raster_info.pNext = &conservative_raster_info;
 
     VkPipelineMultisampleStateCreateInfo multisample_info{};
     multisample_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -378,6 +409,11 @@ void App::create_pipe() {
     blend_info.blendConstants[2] = 0.0f;
     blend_info.blendConstants[3] = 0.0f;
 
+    VkPipelineViewportStateCreateInfo viewport_info{};
+    viewport_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_info.viewportCount = 1;
+    viewport_info.scissorCount = 1;
+
     std::vector<VkDynamicState> dynamic_states = {
         VK_DYNAMIC_STATE_VIEWPORT,
         VK_DYNAMIC_STATE_SCISSOR
@@ -405,15 +441,15 @@ void App::create_pipe() {
 
     VkGraphicsPipelineCreateInfo pipe_info{};
     pipe_info.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipe_info.stageCount = 2;
-    pipe_info.pStages = stages;
+    pipe_info.stageCount = static_cast<uint32_t>(stages.size());
+    pipe_info.pStages = stages.data();
     pipe_info.pVertexInputState = &vert_input_info;
     pipe_info.pInputAssemblyState = &input_asm_info;
-    pipe_info.pViewportState = &viewport_info;
     pipe_info.pRasterizationState = &raster_info;
     pipe_info.pMultisampleState = &multisample_info;
     pipe_info.pDepthStencilState = &depth_info;
     pipe_info.pColorBlendState = &blend_info;
+    pipe_info.pViewportState = &viewport_info;
     pipe_info.pDynamicState = &dynamic_state_info;
     pipe_info.layout = pipe_layout;
     pipe_info.renderPass = rendp;
@@ -441,18 +477,27 @@ void App::write_desc_pool() const {
             write_img_desc_array(textures, static_cast<uint32_t>(i), last_binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
         }
         last_binding++;
+
+        write_img_desc_binding(render_target, static_cast<uint32_t>(i), last_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                               VK_IMAGE_LAYOUT_GENERAL);
+        last_binding++;
     }
 }
 
 void App::update_bufs(uint32_t index_inflight_frame) {
-    push_const.view_proj = cam.get_view_proj();
+    const float min_z = min_vert_coord.z;
+    const float max_z = max_vert_coord.z;
+    push_const.view_proj = glm::ortho(min_vert_coord.x, max_vert_coord.x, min_vert_coord.y, max_vert_coord.y, min_z, max_z);
     push_const.res = {render_extent.width, render_extent.height};
     push_const.time = stats.frame_count;
+
+    ubo.min_z = min_z;
+    ubo.max_z = max_z;
 
     memcpy(unif_bufs[index_inflight_frame].p_mapped_mem, &ubo, sizeof(ubo));
 }
 
-void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) const {
+void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -476,6 +521,10 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) cons
     vkCmdResetQueryPool(cmd_buf, query_pool, img_index * frame_query_count, frame_query_count);
 
     vkCmdWriteTimestamp(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool, img_index * frame_query_count);
+    transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL,
+                          VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+
     vkCmdBeginRenderPass(cmd_buf, &rendp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
@@ -507,12 +556,11 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) cons
 
     vkCmdDrawIndexed(cmd_buf, static_cast<uint32_t>(indices_count), 1, 0, 0, 0);
 
-    ImGui::Render();
-    ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), cmd_buf);
-
     vkCmdEndRenderPass(cmd_buf);
 
     vkCmdWriteTimestamp(cmd_buf, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, query_pool, img_index * frame_query_count + 1);
+    transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
 
     if (vkEndCommandBuffer(cmd_buf) != VK_SUCCESS)
         throw std::runtime_error("failed to record command buffer.");
@@ -534,84 +582,49 @@ void App::fetch_queries(const uint32_t img_index) {
     }
 }
 
-void App::render_loop() {
+void App::comp_vox_grid() {
+    pane_module.min_coord = min_vert_coord;
+    pane_module.max_coord = max_vert_coord;
+    pane_module.total_pane_count = CHUNK_SIDE_LENGTH;
+    pane_module.init();
+
     auto last_frame_checkpoint = std::chrono::high_resolution_clock::now();
-    indices_count = static_cast<int>(indices.size());
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
-
-        ImGui_ImplVulkan_NewFrame();
-        ImGui_ImplGlfw_NewFrame();
-        ImGui::NewFrame();
-
-        ImGui::Begin("Frame Info");
-        ImGui::SetWindowSize(ImVec2(200, 200), ImGuiCond_FirstUseEver);
-        ImGui::SetWindowPos(ImVec2(0, 0), ImGuiCond_FirstUseEver);
-
-        char buffer[100];
-        snprintf(buffer, sizeof(buffer), "frame time: %fms", readable_stats.frame_time);
-        ImGui::Text(buffer);
-        snprintf(buffer, sizeof(buffer), "gpu frame time: %fms", readable_stats.gpu_frame_time);
-        ImGui::Text(buffer);
-        snprintf(buffer, sizeof(buffer), "camera position: %f, %f, %f", cam.pos.x, cam.pos.y, cam.pos.z);
-        ImGui::Text(buffer);
-
-        ImGui::SliderInt("num indices", &indices_count, 0, static_cast<int>(indices.size()));
-
-        if (!textures.empty())
-            ImGui::Checkbox("use textures", reinterpret_cast<bool *>(&ubo.use_textures));
-        else
-            ubo.use_textures = false;
-
-        ImGui::SliderFloat("shadow attenuation", &ubo.shadow_attenuation, 0.0f, 1.0f);
-
-        ImGui::End();
 
         auto start_time = std::chrono::high_resolution_clock::now();
         render();
         auto end_time = std::chrono::high_resolution_clock::now();
         auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-
-        stats.frame_time += static_cast<float>(render_duration.count()) / 1000.0f;
-        stats.frame_time /= 2.0f;
-
-        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-            cam.move_cam(cam.mov_lin);
-        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-            cam.move_cam(-cam.mov_lin);
-
-        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-            cam.move_cam(-cam.mov_lat);
-        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-            cam.move_cam(cam.mov_lat);
-        if (glfwGetKey(window, GLFW_KEY_LEFT_SHIFT) == GLFW_PRESS)
-            cam.set_speed(true);
-        else
-            cam.set_speed(false);
+        stats.frame_time = static_cast<double>(render_duration.count()) / 1000.0;
 
         stats.frame_count++;
-
-        auto current_time = std::chrono::high_resolution_clock::now();
-
-        if (auto duration = std::chrono::duration_cast<std::chrono::seconds>(current_time - last_frame_checkpoint);
-            duration.count() >= 1) {
-            readable_stats.frame_time = stats.frame_time;
-            readable_stats.gpu_frame_time = stats.gpu_frame_time;
-            readable_stats.blit_img_time = stats.blit_img_time;
-
-            last_frame_checkpoint = std::chrono::high_resolution_clock::now();
-        }
     }
+
+    VkCommandBuffer cmd_buf = begin_single_time_cmd();
+    cp_img_to_buf(cmd_buf, render_target, transfer_buf, render_target.extent);
+    end_single_time_cmd(cmd_buf);
+
+    auto *output = new glm::u8vec4[CHUNK_SIZE];
+    cp_data_from_buf(&transfer_buf, output);
+
+    auto *compressed_data = new uint8_t[CHUNK_SIZE];
+
+    uint32_t vox_count = 0;
+    for (int i = 0; i < CHUNK_SIZE; i++) {
+        vox_count += output[i].a;
+        compressed_data[i] = output[i].a;
+    }
+
+    std::cout << "collected " << vox_count << " voxels." << std::endl;
+
+    write_file("output/output.bvox", compressed_data, CHUNK_SIZE);
 
     vkDeviceWaitIdle(dev);
 }
 
 void App::clean_up() {
     clean_up_swap();
-
-    ImGui_ImplVulkan_Shutdown();
-    ImGui_ImplGlfw_Shutdown();
-    ImGui::DestroyContext();
 
     clean_up_pipe();
     clean_up_desc();

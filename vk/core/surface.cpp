@@ -110,25 +110,6 @@ void App::create_swap() {
     render_extent = swap_extent;
 }
 
-void App::recreate_swap() {
-    int width = 0, height = 0;
-    glfwGetFramebufferSize(window, &width, &height);
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(window, &width, &height);
-        glfwWaitEvents();
-    }
-
-    vkDeviceWaitIdle(dev);
-
-    clean_up_swap();
-
-    create_swap();
-    create_depth_resources();
-    create_frame_bufs(swap_imgs);
-
-    cam.update_proj(render_extent);
-}
-
 void App::clean_up_swap() {
     clean_up_img(depth_img);
 

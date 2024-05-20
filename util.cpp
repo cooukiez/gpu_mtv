@@ -4,31 +4,39 @@
 
 #include "util.h"
 
-std::vector<char> read_file(const std::string &filename) {
+template std::vector<char> read_file<char>(const std::string &);
+
+template std::vector<uint8_t> read_file<uint8_t>(const std::string &);
+
+template<typename T>
+std::vector<T> read_file(const std::string &filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
 
     if (!file.is_open())
         throw std::runtime_error("failed to open file.");
 
-    size_t file_size = (size_t) file.tellg();
-    std::vector<char> buf(file_size);
+    size_t file_size = static_cast<size_t>(file.tellg());
+    std::vector<T> buf(file_size / sizeof(T));
 
     file.seekg(0);
-    file.read(buf.data(), static_cast<std::streamsize>(file_size));
+    file.read(reinterpret_cast<char *>(buf.data()), static_cast<std::streamsize>(file_size));
 
     file.close();
 
     return buf;
 }
 
-std::ostream &operator<<(std::ostream &os, const glm::vec3 &v) {
-    os << "[" << v.x << ", " << v.y << ", " << v.z << "]";
-    return os;
-}
+void write_file(const std::string &filename, const void *data, const std::streamsize size) {
+    std::ofstream file(filename, std::ios::out | std::ios::binary);
 
-std::ostream &operator<<(std::ostream &os, const glm::vec4 &v) {
-    os << "[" << v.x << ", " << v.y << ", " << v.z << ", " << v.w << "]";
-    return os;
+    if (!file.is_open())
+        throw std::runtime_error("failed to open file.");
+
+    file.write(static_cast<const char*>(data), size);
+    file.close();
+
+    if (file.fail())
+       throw std::runtime_error("failed to write to file.");
 }
 
 float min_component(const glm::vec3 v) {

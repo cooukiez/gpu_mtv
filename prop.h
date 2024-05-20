@@ -7,8 +7,11 @@
 
 #define WINDOW_TITLE "Vulkan App"
 
-#define INITIAL_WIDTH 800
-#define INITIAL_HEIGHT 600
+#define CHUNK_SIDE_LENGTH 256
+#define CHUNK_SIZE (CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH)
+
+#define INITIAL_WIDTH CHUNK_SIDE_LENGTH
+#define INITIAL_HEIGHT CHUNK_SIDE_LENGTH
 
 #define MAX_FRAMES_IN_FLIGHT 2
 
@@ -19,13 +22,14 @@
 #define VALIDATION
 
 const std::vector<const char *> val_layers = {
-        "VK_LAYER_KHRONOS_validation"
+    "VK_LAYER_KHRONOS_validation"
 };
 
 const std::vector<const char *> dev_exts = {
-        VK_KHR_SWAPCHAIN_EXTENSION_NAME
-        // VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME // not available
-        // VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME // not required anymore
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME
+    // VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME // not available
+    // VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME // not required anymore
 };
 
 //
@@ -41,13 +45,18 @@ constexpr VkCompositeAlphaFlagBitsKHR PREFERRED_COMPOSITE_ALPHA = VK_COMPOSITE_A
 
 constexpr VkImageUsageFlags SWAP_IMG_USAGE = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-constexpr VkComponentMapping DEFAULT_COMPONENT_MAPPING = {.r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY, .a = VK_COMPONENT_SWIZZLE_IDENTITY};
-constexpr VkImageSubresourceRange DEFAULT_SUBRESOURCE_RANGE = {.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1};
+constexpr VkComponentMapping DEFAULT_COMPONENT_MAPPING = {
+    .r = VK_COMPONENT_SWIZZLE_IDENTITY, .g = VK_COMPONENT_SWIZZLE_IDENTITY, .b = VK_COMPONENT_SWIZZLE_IDENTITY,
+    .a = VK_COMPONENT_SWIZZLE_IDENTITY
+};
+constexpr VkImageSubresourceRange DEFAULT_SUBRESOURCE_RANGE = {
+    .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, .baseMipLevel = 0, .levelCount = 1, .baseArrayLayer = 0, .layerCount = 1
+};
 constexpr VkImageSubresourceLayers DEFAULT_SUBRESOURCE_LAYERS = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
 
 constexpr VkBorderColor DEFAULT_SAMPLER_BORDER_COLOR = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 
-#define MODEL_INDEX 2
+#define MODEL_INDEX 3
 
 #if MODEL_INDEX == 0
 #define MODEL_PATH "models/armadillo/armadillo.obj"
@@ -70,7 +79,7 @@ constexpr VkBorderColor DEFAULT_SAMPLER_BORDER_COLOR = VK_BORDER_COLOR_INT_OPAQU
 #if MODEL_INDEX == 3
 #define MODEL_PATH "models/cow/cow.obj"
 #define TEXTURE_PATH "models/cow/"
-#define CULL_MODE_FRONT
+#define CULL_MODE_NONE
 #endif
 
 #if MODEL_INDEX == 4
@@ -125,24 +134,6 @@ constexpr VkCullModeFlags CULL_MODE = VK_CULL_MODE_FRONT_BIT;
 constexpr VkCullModeFlags CULL_MODE = VK_CULL_MODE_BACK_BIT;
 #endif
 
-#define IMGUI_DESCRIPTOR_COUNT 1
 #define DESCRIPTOR_TEXTURE_COUNT 32
-
-//
-// default values for camera
-//
-#define CAM_FOV 60.0f
-#define CAM_SENSITIVITY 0.1f
-
-#define CAM_NEAR 0.1f
-#define CAM_FAR 4096.0f
-
-#define CAM_MIN_PITCH (-89.0f)
-#define CAM_MAX_PITCH 89.0f
-
-#define CAM_YAW_SPACE 120.0f
-
-#define CAM_SLOW 1.0f
-#define CAM_FAST 10.0f
 
 #endif //VCW_PROP_H

@@ -82,9 +82,9 @@ void App::write_sampler_desc_binding(VkSampler sampler, const uint32_t dst_set, 
 }
 
 void App::write_img_desc_binding(const VCW_Image &img, const uint32_t dst_set, const uint32_t dst_binding,
-                                 const VkDescriptorType desc_type) const {
+                                 const VkDescriptorType desc_type, const VkImageLayout img_layout) const {
     VkDescriptorImageInfo img_info{};
-    img_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    img_info.imageLayout = img_layout;
     img_info.imageView = img.view;
     if (img.combined_img_sampler)
         img_info.sampler = img.sampler;
