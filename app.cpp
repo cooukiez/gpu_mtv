@@ -29,8 +29,6 @@ void App::init_app() {
 
     create_cmd_pool();
 
-    create_depth_resources();
-
     load_model();
     create_textures();
     create_textures_sampler();
@@ -226,14 +224,6 @@ void App::create_textures_sampler() {
     sampler = create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
 }
 
-void App::create_depth_resources() {
-    const VkFormat depth_format = find_depth_format();
-
-    depth_img = create_img(swap_extent, depth_format, VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
-                           VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-    create_img_view(&depth_img, VK_IMAGE_ASPECT_DEPTH_BIT);
-}
-
 void App::create_unif_bufs() {
     if (!textures.empty())
         ubo.use_textures = true;
@@ -366,12 +356,12 @@ void App::create_pipe() {
     conservative_raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT;
     conservative_raster_info.flags = 0;
     conservative_raster_info.conservativeRasterizationMode = VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT;
-    conservative_raster_info.extraPrimitiveOverestimationSize = 1.5f;
+    conservative_raster_info.extraPrimitiveOverestimationSize = 0.0f;
 
     VkPipelineRasterizationStateCreateInfo raster_info{};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    raster_info.depthClampEnable = DEPTH_CLAMP_ENABLE;
-    raster_info.rasterizerDiscardEnable = RASTERIZER_DISCARD_ENABLE;
+    raster_info.depthClampEnable = VK_FALSE;
+    raster_info.rasterizerDiscardEnable = VK_FALSE;
     raster_info.polygonMode = POLYGON_MODE;
     raster_info.lineWidth = 1.0f;
     raster_info.cullMode = CULL_MODE;
@@ -383,14 +373,6 @@ void App::create_pipe() {
     multisample_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
     multisample_info.sampleShadingEnable = VK_FALSE;
     multisample_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-    VkPipelineDepthStencilStateCreateInfo depth_info{};
-    depth_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-    depth_info.depthTestEnable = VK_TRUE;
-    depth_info.depthWriteEnable = VK_TRUE;
-    depth_info.depthCompareOp = VK_COMPARE_OP_LESS;
-    depth_info.depthBoundsTestEnable = VK_FALSE;
-    depth_info.stencilTestEnable = VK_FALSE;
 
     VkPipelineColorBlendAttachmentState blend_attach{};
     blend_attach.colorWriteMask =
@@ -447,7 +429,6 @@ void App::create_pipe() {
     pipe_info.pInputAssemblyState = &input_asm_info;
     pipe_info.pRasterizationState = &raster_info;
     pipe_info.pMultisampleState = &multisample_info;
-    pipe_info.pDepthStencilState = &depth_info;
     pipe_info.pColorBlendState = &blend_info;
     pipe_info.pViewportState = &viewport_info;
     pipe_info.pDynamicState = &dynamic_state_info;
@@ -511,9 +492,8 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
     rendp_begin_info.renderArea.offset = {0, 0};
     rendp_begin_info.renderArea.extent = render_extent;
 
-    std::array<VkClearValue, 2> clear_values{};
+    std::array<VkClearValue, 1> clear_values{};
     clear_values[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-    clear_values[1].depthStencil = {1.0f, 0};
 
     rendp_begin_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
     rendp_begin_info.pClearValues = clear_values.data();

@@ -15,35 +15,25 @@ layout (set = 0, binding = 1) uniform sampler samp;
 layout (set = 0, binding = 2) uniform texture2D textures[32];
 layout (set = 0, binding = 3, rgba8) uniform image3D render_target;
 
-layout (location = 0) in vec4 gs_pos;
-layout (location = 1) in vec3 gs_normal;
-layout (location = 2) in vec3 gs_color;
-layout (location = 3) in vec2 gs_uv;
-layout (location = 4) flat in uint gs_mat_id;
-layout (location = 5) flat in int gs_swizzle;
+layout (location = 0) in vec3 inNormal;
+layout (location = 1) in vec3 inColor;
+layout (location = 2) in vec2 inUV;
+layout (location = 3) in vec3 inPosition;
+layout (location = 4) flat in vec3 inMinAABB;
+layout (location = 5) flat in vec3 inMaxAABB;
 
 layout (location = 0) out vec4 out_col;
 
 const vec3 light_dir = normalize(vec3(1.0, 1.0, 1.0));
 
-void main() {
-    vec4 tex_col = ubo.use_textures != 0 ? texture(sampler2D(textures[gs_mat_id], samp), gs_uv) : vec4(gs_color, 1);
+void main()
+{
+    if( any( lessThan(inPosition,inMinAABB) ) || any(lessThan(inMaxAABB,inPosition) ) )
+    discard;
 
-    float diffuse_factor = clamp(max(dot(gs_normal, light_dir), 0.0) + (1 - ubo.shadow_attenuation), 0.0, 1.0);
-    vec3 diffuse_col = vec3(1.0);
+    vec4 color     = vec4(inColor,1);
+    vec3 address3D = inPosition * 0.5 + vec3(0.5);
+    imageStore(render_target, ivec3(imageSize(render_target) * address3D), color);
 
-    out_col = vec4(tex_col.rgb * diffuse_col * diffuse_factor, tex_col.a);
-
-    vec3 restored_pos;
-    switch (gs_swizzle) {
-        case 0: restored_pos = gs_pos.zxy; break;
-        case 1: restored_pos = gs_pos.xzy; break;
-        case 2: restored_pos = gs_pos.xyz; break;
-    }
-
-    out_col = vec4(0, gs_swizzle == 0, 0, 1);
-    debugPrintfEXT("restored_pos: %f %f %f\n", restored_pos.x, restored_pos.y, restored_pos.z);
-    restored_pos *= 0.5;
-    restored_pos += vec3(0.5);
-    imageStore(render_target, ivec3(imageSize(render_target) * restored_pos), vec4(1));
+    out_col = vec4(1);
 }

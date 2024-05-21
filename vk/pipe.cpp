@@ -18,39 +18,22 @@ void App::create_rendp() {
     color_attach.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     attachments.push_back(color_attach);
 
-    VkAttachmentDescription depth_attach{};
-    depth_attach.format = find_depth_format();
-    depth_attach.samples = VK_SAMPLE_COUNT_1_BIT;
-    depth_attach.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    depth_attach.storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth_attach.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
-    depth_attach.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
-    depth_attach.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth_attach.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    attachments.push_back(depth_attach);
-
     VkAttachmentReference color_attach_ref{};
     color_attach_ref.attachment = 0;
     color_attach_ref.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    VkAttachmentReference depth_attach_ref{};
-    depth_attach_ref.attachment = 1;
-    depth_attach_ref.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 
     VkSubpassDescription subpass{};
     subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attach_ref;
-    subpass.pDepthStencilAttachment = &depth_attach_ref;
+
     VkSubpassDependency dependency{};
     dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
     dependency.dstSubpass = 0;
-    dependency.srcStageMask =
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-    dependency.srcAccessMask = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-    dependency.dstStageMask =
-            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.srcAccessMask = 0;
+    dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
 
     VkRenderPassCreateInfo rendp_info{};
     rendp_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -82,9 +65,8 @@ void App::create_frame_bufs(const std::vector<VCW_Image> &img_targets) {
     frame_bufs.resize(swap_imgs.size());
 
     for (size_t i = 0; i < swap_imgs.size(); i++) {
-        std::array<VkImageView, 2> attachments = {
+        std::array<VkImageView, 1> attachments = {
             img_targets[i].view,
-            depth_img.view
         };
 
         VkFramebufferCreateInfo frame_buf_info{};
