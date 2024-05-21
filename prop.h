@@ -56,7 +56,7 @@ constexpr VkImageSubresourceLayers DEFAULT_SUBRESOURCE_LAYERS = {VK_IMAGE_ASPECT
 
 constexpr VkBorderColor DEFAULT_SAMPLER_BORDER_COLOR = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 
-#define MODEL_INDEX 0
+#define MODEL_INDEX 7
 
 #if MODEL_INDEX == 0
 #define MODEL_PATH "models/armadillo/armadillo.obj"

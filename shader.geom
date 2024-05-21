@@ -64,12 +64,12 @@ void main() {
     // 2. calculate data for conservative rasterization
     for (uint i = 0; i < 3; ++i) {
         // calculate bisector for conservative rasterization
-        vec3 bisector = px_diagonal * ((edges[(i + 2) % 3] / dot(edges[(i + 2) % 3], edge_norms[i])) + (edges[i] / dot(edges[i], edge_norms[(i + 2) % 3])));
+        vec3 bisector = 2 * px_diagonal * ((edges[(i + 2) % 3] / dot(edges[(i + 2) % 3], edge_norms[i])) + (edges[i] / dot(edges[i], edge_norms[(i + 2) % 3])));
 
         gs_normal = vs_normal[i];
         gs_color = vs_color[i];
         gs_uv = vs_uv[i];
-        gs_pos = vec3(vert_pos[i].xyz / vert_pos[i].w + bisector);
+        gs_pos = vec3(vert_pos[i].xyz + bisector);
 
         switch (max_idx) {
             case 0:  gl_Position = vec4(vert_pos[i].yz + bisector.yz, 0, vert_pos[i].w);  break;

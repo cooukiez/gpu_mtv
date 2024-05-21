@@ -465,15 +465,17 @@ void App::write_desc_pool() const {
     }
 }
 
-void App::update_bufs(uint32_t index_inflight_frame) {
-    const float min_z = min_vert_coord.z;
-    const float max_z = max_vert_coord.z;
-    push_const.view_proj = glm::ortho(min_vert_coord.x, max_vert_coord.x, min_vert_coord.y, max_vert_coord.y, min_z, max_z);
+void App::update_bufs(const uint32_t index_inflight_frame) {
+    const glm::mat4 ortho_mat = glm::ortho(min_vert_coord.x / 10.0f, max_vert_coord.x / 10.0f,
+                                           min_vert_coord.y / 10.0f, max_vert_coord.y / 10.0f,
+                                           min_vert_coord.z * -1.0f, max_vert_coord.z * -1.0f);
+
+    push_const.view_proj = ortho_mat;
     push_const.res = {render_extent.width, render_extent.height};
     push_const.time = stats.frame_count;
 
-    ubo.min_z = min_z;
-    ubo.max_z = max_z;
+    ubo.min_z = min_vert_coord.z;
+    ubo.max_z = max_vert_coord.z;
 
     memcpy(unif_bufs[index_inflight_frame].p_mapped_mem, &ubo, sizeof(ubo));
 }

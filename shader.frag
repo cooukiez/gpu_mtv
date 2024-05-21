@@ -32,8 +32,9 @@ void main()
     if (any(lessThan(gs_pos, gs_min_aabb)) || any(lessThan(gs_max_aabb, gs_pos))) discard;
 
     vec4 color = vec4(gs_color, 1);
-    vec3 address = gs_pos * 0.5 + vec3(0.5);
-    imageStore(render_target, ivec3(imageSize(render_target) * address), color);
-
+    vec3 address = gs_pos * 0.5;
+    ivec3 img_coord = ivec3(imageSize(render_target) * address);
+    imageStore(render_target, img_coord, color);
+    // ivec3(128, 256, -128)
     out_col = vec4(1);
 }

@@ -26,7 +26,7 @@ mat4 x = mat4(
 );
 
 void main() {
-    vs_pos = pc.view_proj * x * vec4(in_pos, 1.0);
+    vs_pos = pc.view_proj * vec4(in_pos, 1.0);
     gl_Position = vs_pos;
 
     vs_normal = in_normal;
