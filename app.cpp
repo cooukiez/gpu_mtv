@@ -466,9 +466,15 @@ void App::write_desc_pool() const {
 }
 
 void App::update_bufs(const uint32_t index_inflight_frame) {
-    const glm::mat4 ortho_mat = glm::ortho(min_vert_coord.x / 10.0f, max_vert_coord.x / 10.0f,
-                                           min_vert_coord.y / 10.0f, max_vert_coord.y / 10.0f,
-                                           min_vert_coord.z * -1.0f, max_vert_coord.z * -1.0f);
+    const glm::vec3 coord_diff = max_vert_coord - min_vert_coord;
+
+    const glm::mat4 ortho_mat = glm::ortho(0.0f, coord_diff.x,
+                                           0.0f, coord_diff.y,
+                                           0.0f, coord_diff.z);
+
+    //const glm::mat4 ortho_mat = glm::ortho(0.0, 256.0 / 2.0, 0.0, 256.0 / 2.0, 0.0, 256.0 / 2.0);
+
+    // std::cout << ortho_mat << std::endl;
 
     push_const.view_proj = ortho_mat;
     push_const.res = {render_extent.width, render_extent.height};

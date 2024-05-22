@@ -18,13 +18,6 @@ layout (location = 2) out vec3 vs_color;
 layout (location = 3) out vec2 vs_uv;
 layout (location = 4) flat out uint vs_mat_id;
 
-mat4 x = mat4(
-    vec4(1.0, 0.0, 0.0, 0.0),
-    vec4(0.0, -1.0, 0.0, 0.0),
-    vec4(0.0, 0.0, -1.0, 0.0),
-    vec4(0.0, 0.0, 0.0, 1.0)
-);
-
 void main() {
     vs_pos = pc.view_proj * vec4(in_pos, 1.0);
     gl_Position = vs_pos;
