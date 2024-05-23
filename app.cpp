@@ -293,7 +293,7 @@ void App::create_desc_pool_layout() {
     render_target_layout_binding.descriptorCount = 1;
     render_target_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     render_target_layout_binding.pImmutableSamplers = nullptr;
-    render_target_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    render_target_layout_binding.stageFlags = VK_SHADER_STAGE_ALL;
     bindings.push_back(render_target_layout_binding);
     last_binding++;
 
@@ -467,16 +467,22 @@ void App::write_desc_pool() const {
 
 void App::update_bufs(const uint32_t index_inflight_frame) {
     const glm::vec3 coord_diff = max_vert_coord - min_vert_coord;
+    const glm::mat4 translation_mat = glm::translate(glm::mat4(1.0f),
+                                                     -glm::vec3(min_vert_coord.x, min_vert_coord.y, 0.f));
 
-    const glm::mat4 ortho_mat = glm::ortho(0.0f, coord_diff.x,
-                                           0.0f, coord_diff.y,
-                                           0.0f, coord_diff.z);
+    glm::mat4 ortho_mat = glm::ortho(min_vert_coord.x, max_vert_coord.x,
+                                     min_vert_coord.y, max_vert_coord.y,
+                                     min_vert_coord.z, max_vert_coord.z);
+
+    ortho_mat = glm::ortho(0.0f, coord_diff.x,
+                           0.0f, coord_diff.y,
+                           0.0f, coord_diff.z * .5f);
 
     //const glm::mat4 ortho_mat = glm::ortho(0.0, 256.0 / 2.0, 0.0, 256.0 / 2.0, 0.0, 256.0 / 2.0);
 
     // std::cout << ortho_mat << std::endl;
 
-    push_const.view_proj = ortho_mat;
+    push_const.view_proj = ortho_mat * translation_mat;
     push_const.res = {render_extent.width, render_extent.height};
     push_const.time = stats.frame_count;
 

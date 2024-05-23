@@ -4,11 +4,12 @@
 
 #extension GL_ARB_separate_shader_objects: enable
 #extension GL_ARB_shading_language_420pack: enable
-
-#define CHUNK_SIDE_LENGTH 256
+#extension GL_EXT_debug_printf: enable
 
 layout (triangles) in;
 layout (triangle_strip, max_vertices = 3) out;
+
+layout (set = 0, binding = 3, rgba8) uniform image3D render_target;
 
 layout (location = 0) in vec4 vs_pos[];
 layout (location = 1) in vec3 vs_normal[];
@@ -30,7 +31,7 @@ void main() {
     vec3 abs_norm = abs(norm);
 
     // calculate pixel size
-    vec3 chunk_size = vec3(CHUNK_SIDE_LENGTH);
+    vec3 chunk_size = imageSize(render_target);
     vec3 px_size = 1.0 / chunk_size;
     float px_diagonal = 1.732050808 * px_size.x;
 
@@ -64,7 +65,7 @@ void main() {
     // 2. calculate data for conservative rasterization
     for (uint i = 0; i < 3; ++i) {
         // calculate bisector for conservative rasterization
-        vec3 bisector = 2 * px_diagonal * ((edges[(i + 2) % 3] / dot(edges[(i + 2) % 3], edge_norms[i])) + (edges[i] / dot(edges[i], edge_norms[(i + 2) % 3])));
+        vec3 bisector = px_diagonal * ((edges[(i + 2) % 3] / dot(edges[(i + 2) % 3], edge_norms[i])) + (edges[i] / dot(edges[i], edge_norms[(i + 2) % 3])));
 
         gs_normal = vs_normal[i];
         gs_color = vs_color[i];
