@@ -5,17 +5,20 @@
 #ifndef VCW_PROP_H
 #define VCW_PROP_H
 
-#define WINDOW_TITLE "Vulkan App"
+#define WINDOW_TITLE "mesh to voxel converter"
 
+// chaneging size needs fixing
 #define CHUNK_SIDE_LENGTH 256
 #define CHUNK_SIZE (CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH)
+
+#define GRID_RESOLUTION = 1024
 
 #define INITIAL_WIDTH CHUNK_SIDE_LENGTH
 #define INITIAL_HEIGHT CHUNK_SIDE_LENGTH
 
 #define MAX_FRAMES_IN_FLIGHT 2
 
-#define APP_NAME "Vulkan App"
+#define APP_NAME "mesh to voxel converter"
 #define ENGINE_NAME "No Engine"
 
 #define VERBOSE
@@ -56,7 +59,7 @@ constexpr VkImageSubresourceLayers DEFAULT_SUBRESOURCE_LAYERS = {VK_IMAGE_ASPECT
 
 constexpr VkBorderColor DEFAULT_SAMPLER_BORDER_COLOR = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
 
-#define MODEL_INDEX 7
+#define MODEL_INDEX 4
 
 #if MODEL_INDEX == 0
 #define MODEL_PATH "models/armadillo/armadillo.obj"

@@ -9,54 +9,6 @@
 
 #define TINYOBJLOADER_IMPLEMENTATION
 
-void App::init_app() {
-    //
-    // vulkan core initialization
-    //
-    create_inst();
-    setup_debug_msg();
-    create_surf();
-
-    pick_phy_dev();
-    create_dev();
-
-    create_swap();
-
-    //
-    // pipeline creation
-    //
-    create_rendp();
-
-    create_cmd_pool();
-
-    load_model();
-    create_textures();
-    create_textures_sampler();
-
-    create_vert_buf();
-    create_index_buf();
-
-    create_unif_bufs();
-
-    create_render_target();
-
-    create_frame_bufs(swap_imgs);
-
-    create_desc_pool_layout();
-    create_pipe();
-
-    create_desc_pool(MAX_FRAMES_IN_FLIGHT);
-    write_desc_pool();
-
-    create_cmd_bufs();
-    create_sync();
-
-    create_query_pool(2);
-
-    const float largest_dim = max_component(max_vert_coord - min_vert_coord);
-    std::cout << "largest scene dimension: " << largest_dim << std::endl;
-}
-
 void App::load_model() {
     std::string warn, err;
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH, TEXTURE_PATH))
@@ -127,8 +79,55 @@ void App::load_model() {
         }
     }
 
+    coord_diff = max_vert_coord - min_vert_coord;
+
     std::cout << "min vertex coord: " << min_vert_coord << std::endl;
     std::cout << "max vertex coord: " << max_vert_coord << std::endl;
+    std::cout << "coord diff: " << coord_diff << std::endl;
+}
+
+void App::init_app() {
+    //
+    // vulkan core initialization
+    //
+    create_inst();
+    setup_debug_msg();
+    create_surf();
+
+    pick_phy_dev();
+    create_dev();
+
+    create_swap();
+
+    //
+    // pipeline creation
+    //
+    create_rendp();
+
+    create_cmd_pool();
+
+    create_textures();
+    create_textures_sampler();
+
+    create_vert_buf();
+    create_index_buf();
+
+    create_unif_bufs();
+
+    create_render_target();
+
+    create_frame_bufs(swap_imgs);
+
+    create_desc_pool_layout();
+    create_pipe();
+
+    create_desc_pool(MAX_FRAMES_IN_FLIGHT);
+    write_desc_pool();
+
+    create_cmd_bufs();
+    create_sync();
+
+    create_query_pool(2);
 }
 
 void App::create_vert_buf() {
@@ -227,9 +226,11 @@ void App::create_textures_sampler() {
 void App::create_unif_bufs() {
     if (!textures.empty())
         ubo.use_textures = true;
-    ubo.shadow_attenuation = 0.5f;
+
     ubo.min_vert = glm::vec4(min_vert_coord, 1.0f);
     ubo.max_vert = glm::vec4(max_vert_coord, 1.0f);
+    ubo.chunk_res = glm::vec4(glm::vec3(CHUNK_SIDE_LENGTH), 0);
+
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
     unif_bufs.resize(MAX_FRAMES_IN_FLIGHT);
@@ -264,7 +265,7 @@ void App::create_desc_pool_layout() {
     uniform_layout_binding.descriptorCount = 1;
     uniform_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     uniform_layout_binding.pImmutableSamplers = nullptr;
-    uniform_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+    uniform_layout_binding.stageFlags = VK_SHADER_STAGE_ALL;
     bindings.push_back(uniform_layout_binding);
     last_binding++;
 
@@ -293,7 +294,7 @@ void App::create_desc_pool_layout() {
     render_target_layout_binding.descriptorCount = 1;
     render_target_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     render_target_layout_binding.pImmutableSamplers = nullptr;
-    render_target_layout_binding.stageFlags = VK_SHADER_STAGE_ALL;
+    render_target_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
     bindings.push_back(render_target_layout_binding);
     last_binding++;
 
@@ -352,12 +353,6 @@ void App::create_pipe() {
     input_asm_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     input_asm_info.primitiveRestartEnable = VK_FALSE;
 
-    VkPipelineRasterizationConservativeStateCreateInfoEXT conservative_raster_info{};
-    conservative_raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_CONSERVATIVE_STATE_CREATE_INFO_EXT;
-    conservative_raster_info.flags = 0;
-    conservative_raster_info.conservativeRasterizationMode = VK_CONSERVATIVE_RASTERIZATION_MODE_OVERESTIMATE_EXT;
-    conservative_raster_info.extraPrimitiveOverestimationSize = 0.0f;
-
     VkPipelineRasterizationStateCreateInfo raster_info{};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.depthClampEnable = VK_FALSE;
@@ -367,7 +362,6 @@ void App::create_pipe() {
     raster_info.cullMode = CULL_MODE;
     raster_info.frontFace = FRONT_FACE;
     raster_info.depthBiasEnable = VK_FALSE;
-    raster_info.pNext = &conservative_raster_info;
 
     VkPipelineMultisampleStateCreateInfo multisample_info{};
     multisample_info.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -442,6 +436,7 @@ void App::create_pipe() {
 
     vkDestroyShaderModule(dev, frag_module, nullptr);
     vkDestroyShaderModule(dev, vert_module, nullptr);
+    vkDestroyShaderModule(dev, geom_module, nullptr);
 }
 
 void App::write_desc_pool() const {
@@ -466,30 +461,9 @@ void App::write_desc_pool() const {
 }
 
 void App::update_bufs(const uint32_t index_inflight_frame) {
-    const glm::vec3 coord_diff = max_vert_coord - min_vert_coord;
-    const glm::mat4 translation_mat = glm::translate(glm::mat4(1.0f),
-                                                     -glm::vec3(min_vert_coord.x, min_vert_coord.y, 0.f));
-
-    glm::mat4 ortho_mat = glm::ortho(min_vert_coord.x, max_vert_coord.x,
-                                     min_vert_coord.y, max_vert_coord.y,
-                                     min_vert_coord.z, max_vert_coord.z);
-
-    ortho_mat = glm::ortho(0.0f, coord_diff.x,
-                           0.0f, coord_diff.y,
-                           0.0f, coord_diff.z * .5f);
-
-    //const glm::mat4 ortho_mat = glm::ortho(0.0, 256.0 / 2.0, 0.0, 256.0 / 2.0, 0.0, 256.0 / 2.0);
-
-    // std::cout << ortho_mat << std::endl;
-
-    push_const.view_proj = ortho_mat * translation_mat;
+    push_const.view_proj = chunk_module.proj;
     push_const.res = {render_extent.width, render_extent.height};
     push_const.time = stats.frame_count;
-
-    ubo.min_z = min_vert_coord.z;
-    ubo.max_z = max_vert_coord.z;
-
-    memcpy(unif_bufs[index_inflight_frame].p_mapped_mem, &ubo, sizeof(ubo));
 }
 
 void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
@@ -515,9 +489,9 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
     vkCmdResetQueryPool(cmd_buf, query_pool, img_index * frame_query_count, frame_query_count);
 
     vkCmdWriteTimestamp(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool, img_index * frame_query_count);
-    transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL,
-                          VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
+    transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
+                          VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
     vkCmdBeginRenderPass(cmd_buf, &rendp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -553,8 +527,17 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
     vkCmdEndRenderPass(cmd_buf);
 
     vkCmdWriteTimestamp(cmd_buf, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, query_pool, img_index * frame_query_count + 1);
-    transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+
+    transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT,
                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+    buffer_memory_barrier(cmd_buf, &transfer_buf, VK_ACCESS_TRANSFER_WRITE_BIT,
+                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
+
+    cp_img_to_buf(cmd_buf, render_target, transfer_buf, render_target.extent);
+    transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL, 0,
+                          VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
+    buffer_memory_barrier(cmd_buf, &transfer_buf, 0,
+                          VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
 
     if (vkEndCommandBuffer(cmd_buf) != VK_SUCCESS)
         throw std::runtime_error("failed to record command buffer.");
@@ -577,12 +560,18 @@ void App::fetch_queries(const uint32_t img_index) {
 }
 
 void App::comp_vox_grid() {
-    pane_module.min_coord = min_vert_coord;
-    pane_module.max_coord = max_vert_coord;
-    pane_module.total_pane_count = CHUNK_SIDE_LENGTH;
-    pane_module.init();
+    chunk_module.init(min_vert_coord, max_vert_coord);
+    chunk_module.axis_scaler = {1.f, 1.f, .5f};
+    chunk_module.update_proj();
 
-    auto last_frame_checkpoint = std::chrono::high_resolution_clock::now();
+    ubo.sector_start = glm::vec4(glm::vec3(0.f), 0.f);
+    ubo.sector_end = glm::vec4(glm::vec3(256.f), 0.f);
+
+    for (const auto &unif_buf: unif_bufs)
+        memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
+
+    auto *cached_output = new glm::u8vec4[CHUNK_SIZE];
+
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
 
@@ -591,23 +580,19 @@ void App::comp_vox_grid() {
         auto end_time = std::chrono::high_resolution_clock::now();
         auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
         stats.frame_time = static_cast<double>(render_duration.count()) / 1000.0;
+        std::cout << "render time: " << stats.frame_time << std::endl;
+
+        cp_data_from_buf(&transfer_buf, cached_output);
 
         stats.frame_count++;
     }
-
-    VkCommandBuffer cmd_buf = begin_single_time_cmd();
-    cp_img_to_buf(cmd_buf, render_target, transfer_buf, render_target.extent);
-    end_single_time_cmd(cmd_buf);
-
-    auto *output = new glm::u8vec4[CHUNK_SIZE];
-    cp_data_from_buf(&transfer_buf, output);
 
     auto *compressed_data = new uint8_t[CHUNK_SIZE];
 
     uint32_t vox_count = 0;
     for (int i = 0; i < CHUNK_SIZE; i++) {
-        vox_count += output[i].a;
-        compressed_data[i] = output[i].a;
+        vox_count += cached_output[i].a;
+        compressed_data[i] = cached_output[i].a;
     }
 
     std::cout << "collected " << vox_count << " voxels." << std::endl;
@@ -628,6 +613,12 @@ void App::clean_up() {
 
     for (const auto texture: textures)
         clean_up_img(texture);
+
+    clean_up_buf(transfer_buf);
+
+    vkDestroySampler(dev, sampler, nullptr);
+
+    clean_up_img(render_target);
 
     clean_up_buf(vert_buf);
     clean_up_buf(index_buf);

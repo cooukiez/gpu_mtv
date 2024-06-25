@@ -42,8 +42,9 @@ VCW_Image App::create_img(const VkExtent3D extent, const VkFormat format, const 
                           const VkImageType img_type) const {
     VCW_Image img{};
     img.format = format;
-    img.cur_layout = VK_IMAGE_LAYOUT_UNDEFINED;
     img.extent = extent;
+    img.cur_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+    img.cur_access_mask = 0;
 
     VkImageCreateInfo img_info{};
     img_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -151,7 +152,6 @@ VkAccessFlags App::get_access_mask(const VkImageLayout layout) {
         case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL:
             return VK_ACCESS_TRANSFER_WRITE_BIT;
 
-
         case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL:
             return VK_ACCESS_SHADER_READ_BIT;
 
@@ -166,7 +166,7 @@ VkAccessFlags App::get_access_mask(const VkImageLayout layout) {
     }
 }
 
-void App::transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, const VkImageLayout layout,
+void App::transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, const VkImageLayout layout, const VkAccessFlags access_mask,
                                 const VkPipelineStageFlags src_stage, const VkPipelineStageFlags dst_stage) {
     VkImageMemoryBarrier barrier{};
     barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -177,12 +177,18 @@ void App::transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, const
     barrier.image = p_img->img;
     barrier.subresourceRange = DEFAULT_SUBRESOURCE_RANGE;
 
-    barrier.srcAccessMask = get_access_mask(p_img->cur_layout);
-    barrier.dstAccessMask = get_access_mask(layout);
+    barrier.srcAccessMask = p_img->cur_access_mask;
+    barrier.dstAccessMask = access_mask;
 
     vkCmdPipelineBarrier(cmd_buf, src_stage, dst_stage, 0, 0, nullptr, 0, nullptr, 1, &barrier);
 
     p_img->cur_layout = layout;
+    p_img->cur_access_mask = access_mask;
+}
+
+void App::transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, const VkImageLayout layout,
+                                const VkPipelineStageFlags src_stage, const VkPipelineStageFlags dst_stage) {
+    transition_img_layout(cmd_buf, p_img, layout, get_access_mask(layout), src_stage, dst_stage);
 }
 
 void App::cp_buf_to_img(VkCommandBuffer cmd_buf, const VCW_Buffer &buf, const VCW_Image &img, const VkExtent3D extent) {

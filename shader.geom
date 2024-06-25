@@ -9,7 +9,16 @@
 layout (triangles) in;
 layout (triangle_strip, max_vertices = 3) out;
 
-layout (set = 0, binding = 3, rgba8) uniform image3D render_target;
+layout (set = 0, binding = 0) uniform UBO {
+    vec4 min_vert;
+    vec4 max_vert;
+    vec4 chunk_res;
+
+    vec4 sector_start;
+    vec4 sector_end;
+
+    uint use_textures;
+} ubo;
 
 layout (location = 0) in vec4 vs_pos[];
 layout (location = 1) in vec3 vs_normal[];
@@ -31,7 +40,7 @@ void main() {
     vec3 abs_norm = abs(norm);
 
     // calculate pixel size
-    vec3 chunk_size = imageSize(render_target);
+    vec3 chunk_size = ubo.chunk_res.xyz;
     vec3 px_size = 1.0 / chunk_size;
     float px_diagonal = 1.732050808 * px_size.x;
 

@@ -19,8 +19,9 @@ uint32_t App::find_mem_type(const uint32_t type_filter, const VkMemoryPropertyFl
 
 VCW_Buffer App::create_buf(const VkDeviceSize size, const VkBufferUsageFlags usage,
                            const VkMemoryPropertyFlags mem_props) const {
-    VCW_Buffer buf;
+    VCW_Buffer buf{};
     buf.size = size;
+    buf.cur_access_mask = 0;
 
     VkBufferCreateInfo buf_info{};
     buf_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -89,6 +90,23 @@ void App::cp_buf(const VCW_Buffer &src_buf, const VCW_Buffer &dst_buf) {
     vkCmdCopyBuffer(cmd_buf, src_buf.buf, dst_buf.buf, 1, &cp_region);
 
     end_single_time_cmd(cmd_buf);
+}
+
+void App::buffer_memory_barrier(VkCommandBuffer cmd_buf, VCW_Buffer *p_buf, const VkAccessFlags access_mask,
+                                const VkPipelineStageFlags src_stage, const VkPipelineStageFlags dst_stage) {
+    VkBufferMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+    barrier.srcAccessMask = p_buf->cur_access_mask;
+    barrier.dstAccessMask = access_mask;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.buffer = p_buf->buf;
+    barrier.offset = 0;
+    barrier.size = p_buf->size;
+
+    vkCmdPipelineBarrier(cmd_buf, src_stage, dst_stage, 0, 0, nullptr, 1, &barrier, 0, nullptr);
+
+    p_buf->cur_access_mask = access_mask;
 }
 
 void App::clean_up_buf(const VCW_Buffer &buf) const {

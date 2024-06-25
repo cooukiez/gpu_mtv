@@ -76,18 +76,20 @@ struct VCW_PushConstants {
 struct VCW_Uniform {
     glm::vec4 min_vert;
     glm::vec4 max_vert;
+    glm::vec4 chunk_res;
+    glm::vec4 sector_start;
+    glm::vec4 sector_end;
     uint32_t use_textures;
-    float shadow_attenuation;
-
-    float min_z;
-    float max_z;
 };
 
 struct VCW_Buffer {
     VkDeviceSize size;
     VkBuffer buf;
+
     VkDeviceMemory mem;
     void *p_mapped_mem = nullptr;
+
+    VkAccessFlags cur_access_mask;
 };
 
 struct VCW_Image {
@@ -101,39 +103,35 @@ struct VCW_Image {
 
     VkExtent3D extent;
     VkFormat format;
+
     VkImageLayout cur_layout;
+    VkAccessFlags cur_access_mask;
 };
 
 struct VCW_OrthographicChunkModule {
     glm::mat4 proj;
+    glm::mat4 trans_mat;
 
     glm::vec3 min_coord;
     glm::vec3 max_coord;
-    float total_pane_count;
+    glm::vec3 coord_diff;
 
-    glm::vec3 chunk_space;
-    float thickness;
+    glm::vec3 axis_scaler = {1.f, 1.f, 1.f};
 
-    float z_near;
-    float z_far;
+    void init(const glm::vec3 loc_min_coord, const glm::vec3 loc_max_coord) {
+        min_coord = loc_min_coord;
+        max_coord = loc_max_coord;
+        coord_diff = loc_max_coord - loc_min_coord;
 
-    void init() {
-        chunk_space = max_coord - min_coord;
-        // thickness = chunk_space.z / total_pane_count;
-
-        z_near = min_coord.z;
-        z_far = min_coord.z;
-
-        proj = glm::ortho(min_coord.x, max_coord.x, min_coord.y, max_coord.y, z_near, z_far);
+        trans_mat = glm::translate(glm::mat4(1.f), -glm::vec3(min_coord.x, min_coord.y, 0.f));
     }
 
-    void update_proj(const uint32_t pane_index) {
-        const float slicing_pane_z = min_coord.z + thickness * static_cast<float>(pane_index);
+    void update_proj() {
+        const glm::mat4 ortho_mat = glm::ortho(0.f, coord_diff.x * axis_scaler.x,
+                                               0.f, coord_diff.y * axis_scaler.y,
+                                               0.f, coord_diff.z * axis_scaler.z);
 
-        z_near = slicing_pane_z - thickness / 2.0f;
-        z_far = slicing_pane_z + thickness / 2.0f;
-
-        proj = glm::ortho(min_coord.x, max_coord.x, min_coord.y, max_coord.y, z_near, z_far);
+        proj = ortho_mat * trans_mat;
     }
 };
 
@@ -146,6 +144,9 @@ struct VCW_RenderStats {
 class App {
 public:
     void run() {
+        load_model();
+        render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x), static_cast<uint32_t>(coord_diff.y)};
+
         init_window();
         init_app();
         comp_vox_grid();
@@ -207,12 +208,13 @@ public:
     VCW_Buffer vert_buf;
     glm::vec3 min_vert_coord;
     glm::vec3 max_vert_coord;
+    glm::vec3 coord_diff;
+
     std::vector<uint32_t> indices;
     int indices_count;
     VCW_Buffer index_buf;
 
     VCW_Image render_target;
-    std::array<VCW_Image, CHUNK_SIDE_LENGTH> render_img_views;
     VCW_Buffer transfer_buf;
 
     VkQueryPool query_pool;
@@ -231,7 +233,7 @@ public:
     VCW_RenderStats stats;
     VCW_RenderStats readable_stats;
 
-    VCW_OrthographicChunkModule pane_module;
+    VCW_OrthographicChunkModule chunk_module;
 
     //
     //
@@ -322,6 +324,9 @@ public:
 
     void cp_buf(const VCW_Buffer &src_buf, const VCW_Buffer &dst_buf);
 
+    static void buffer_memory_barrier(VkCommandBuffer cmd_buf, VCW_Buffer *p_buf, const VkAccessFlags access_mask,
+                                      const VkPipelineStageFlags src_stage, const VkPipelineStageFlags dst_stage);
+
     void clean_up_buf(const VCW_Buffer &buf) const;
 
     //
@@ -353,6 +358,10 @@ public:
     void create_sampler(VCW_Image *p_img, VkFilter filter, VkSamplerAddressMode address_mode) const;
 
     static VkAccessFlags get_access_mask(VkImageLayout layout);
+
+    static void transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, VkImageLayout layout,
+                                      VkAccessFlags access_mask, VkPipelineStageFlags src_stage,
+                                      VkPipelineStageFlags dst_stage);
 
     static void transition_img_layout(VkCommandBuffer cmd_buf, VCW_Image *p_img, VkImageLayout layout,
                                       VkPipelineStageFlags src_stage, VkPipelineStageFlags dst_stage);
@@ -464,4 +473,4 @@ public:
     void fetch_queries(uint32_t img_index);
 };
 
-#endif //VCW_APP_H
+#endif //VCW_A

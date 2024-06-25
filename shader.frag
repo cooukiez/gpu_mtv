@@ -6,13 +6,14 @@
 layout (set = 0, binding = 0) uniform UBO {
     vec4 min_vert;
     vec4 max_vert;
+    vec4 chunk_res;
+
+    vec4 sector_start;
+    vec4 sector_end;
 
     uint use_textures;
-    float shadow_attenuation;
-
-    float min_z;
-    float max_z;
 } ubo;
+
 layout (set = 0, binding = 1) uniform sampler samp;
 layout (set = 0, binding = 2) uniform texture2D textures[32];
 layout (set = 0, binding = 3, rgba8) uniform image3D render_target;
@@ -27,13 +28,16 @@ layout (location = 6) flat in vec3 gs_max_aabb;
 
 layout (location = 0) out vec4 out_col;
 
-void main()
-{
+void main() {
     if (any(lessThan(gs_pos, gs_min_aabb)) || any(lessThan(gs_max_aabb, gs_pos))) discard;
 
-    vec4 color = vec4(gs_color, 1);
-    vec3 address = gs_pos * vec3(0.5, 0.5, 0.5) + vec3(0.5, 0.5, 0.5);
-    ivec3 img_coord = ivec3(imageSize(render_target) * address);
-    imageStore(render_target, img_coord.xzy, color);
-    out_col = vec4(1);
+    vec3 address = gs_pos * vec3(0.5) + vec3(0.5);
+    ivec3 img_coord = ivec3(ubo.chunk_res.xyz * address);
+    if (any(lessThan(vec3(img_coord), ubo.sector_start.xyz)) || any(lessThan(ubo.sector_end.xyz, vec3(img_coord)))) discard;
+    img_coord -= ivec3(ubo.sector_start.xyz);
+
+    vec4 tex_col = ubo.use_textures != 0 ? texture(sampler2D(textures[gs_mat_id], samp), gs_uv) : vec4(gs_color, 1);
+
+    imageStore(render_target, img_coord.xzy, tex_col);
+    out_col = tex_col;
 }

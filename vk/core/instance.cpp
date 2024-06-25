@@ -10,7 +10,8 @@ void App::init_window() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
-    window = glfwCreateWindow(INITIAL_WIDTH, INITIAL_HEIGHT, WINDOW_TITLE, nullptr, nullptr);
+    window = glfwCreateWindow(static_cast<int>(render_extent.width), static_cast<int>(render_extent.height),
+                              WINDOW_TITLE, nullptr, nullptr);
     glfwSetWindowUserPointer(window, this);
 }
 

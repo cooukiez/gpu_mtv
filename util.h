@@ -10,7 +10,9 @@
 template<typename T>
 std::vector<T> read_file(const std::string &filename);
 
-void write_file(const std::string &filename, const void *data, const std::streamsize size);
+void write_file(const std::string &filename, const void *data, std::streamsize size);
+
+void append_to_file(const std::string &filename, const void *data, std::streamsize size);
 
 float min_component(glm::vec3 v);
 

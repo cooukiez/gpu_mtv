@@ -39,6 +39,19 @@ void write_file(const std::string &filename, const void *data, const std::stream
        throw std::runtime_error("failed to write to file.");
 }
 
+void append_to_file(const std::string &filename, const void *data, const std::streamsize size) {
+    std::ofstream file(filename, std::ios::out | std::ios::binary |std::ios::app);
+
+    if (!file.is_open())
+        throw std::runtime_error("failed to open file.");
+
+    file.write(static_cast<const char*>(data), size);
+    file.close();
+
+    if (file.fail())
+        throw std::runtime_error("failed to write to file.");
+}
+
 float min_component(const glm::vec3 v) {
     return std::min(v.x, std::min(v.y, v.z));
 }

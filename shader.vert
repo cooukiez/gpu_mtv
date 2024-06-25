@@ -6,8 +6,6 @@ layout (push_constant) uniform PushConstants {
     uint time;
 } pc;
 
-layout (set = 0, binding = 3, rgba8) uniform image3D render_target;
-
 layout (location = 0) in vec3 in_pos;
 layout (location = 1) in vec3 in_normal;
 layout (location = 2) in vec3 in_color;
