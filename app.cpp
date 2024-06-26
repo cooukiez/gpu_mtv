@@ -229,8 +229,8 @@ void App::create_unif_bufs() {
 
     ubo.min_vert = glm::vec4(min_vert_coord, 1.0f);
     ubo.max_vert = glm::vec4(max_vert_coord, 1.0f);
-    ubo.chunk_res = glm::vec4(glm::vec3(CHUNK_SIDE_LENGTH), 0);
-
+    ubo.chunk_res = glm::vec4(coord_diff, 0);
+    ubo.scalar = SCALAR;
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
     unif_bufs.resize(MAX_FRAMES_IN_FLIGHT);
@@ -564,16 +564,25 @@ void App::comp_vox_grid() {
     chunk_module.axis_scaler = {1.f, 1.f, .5f};
     chunk_module.update_proj();
 
-    ubo.sector_start = glm::vec4(glm::vec3(0.f), 0.f);
-    ubo.sector_end = glm::vec4(glm::vec3(256.f), 0.f);
-
-    for (const auto &unif_buf: unif_bufs)
-        memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
+    write_file("output/output.bvox", nullptr, 0);
+    constexpr char bvox_version = BVOX_VERSION;
+    constexpr uint32_t chunk_side_length = CHUNK_SIDE_LENGTH;
+    constexpr uint32_t chunk_size = CHUNK_SIZE;
+    append_to_file("output/output.bvox", &bvox_version, sizeof(bvox_version));
+    append_to_file("output/output.bvox", &chunk_side_length, sizeof(chunk_side_length));
+    append_to_file("output/output.bvox", &chunk_size, sizeof(chunk_size));
 
     auto *cached_output = new glm::u8vec4[CHUNK_SIZE];
+    std::cout << "render extent: " << render_extent.width << "x" << render_extent.height << std::endl;
 
     while (!glfwWindowShouldClose(window)) {
         glfwPollEvents();
+
+        ubo.sector_start = glm::vec4(glm::vec3(256.f, 0.f, 0.f), 0.f);
+        ubo.sector_end = glm::vec4(glm::vec3(512.f), 0.f);
+
+        for (const auto &unif_buf: unif_bufs)
+            memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
 
         auto start_time = std::chrono::high_resolution_clock::now();
         render();
@@ -597,9 +606,13 @@ void App::comp_vox_grid() {
 
     std::cout << "collected " << vox_count << " voxels." << std::endl;
 
-    write_file("output/output.bvox", compressed_data, CHUNK_SIZE);
+    append_to_file("output/output.bvox", compressed_data, CHUNK_SIZE);
 
     vkDeviceWaitIdle(dev);
+
+    char test[] = "1234";
+    write_file("output/test.bvox", &test, 4);
+    append_to_file("output/test.bvox", &test, 4);
 }
 
 void App::clean_up() {

@@ -11,6 +11,7 @@ layout (set = 0, binding = 0) uniform UBO {
     vec4 sector_start;
     vec4 sector_end;
 
+    float scalar;
     uint use_textures;
 } ubo;
 
@@ -32,7 +33,7 @@ void main() {
     if (any(lessThan(gs_pos, gs_min_aabb)) || any(lessThan(gs_max_aabb, gs_pos))) discard;
 
     vec3 address = gs_pos * vec3(0.5) + vec3(0.5);
-    ivec3 img_coord = ivec3(ubo.chunk_res.xyz * address);
+    ivec3 img_coord = ivec3(ubo.chunk_res.xyz * address * ubo.scalar * 0.5);
     if (any(lessThan(vec3(img_coord), ubo.sector_start.xyz)) || any(lessThan(ubo.sector_end.xyz, vec3(img_coord)))) discard;
     img_coord -= ivec3(ubo.sector_start.xyz);
 

@@ -79,6 +79,7 @@ struct VCW_Uniform {
     glm::vec4 chunk_res;
     glm::vec4 sector_start;
     glm::vec4 sector_end;
+    float scalar;
     uint32_t use_textures;
 };
 
@@ -145,7 +146,7 @@ class App {
 public:
     void run() {
         load_model();
-        render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x), static_cast<uint32_t>(coord_diff.y)};
+        render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x * SCALAR), static_cast<uint32_t>(coord_diff.y * SCALAR)};
 
         init_window();
         init_app();
