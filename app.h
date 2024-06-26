@@ -146,7 +146,10 @@ class App {
 public:
     void run() {
         load_model();
-        render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x * SCALAR), static_cast<uint32_t>(coord_diff.y * SCALAR)};
+
+        model_scale = GRID_RESOLUTION / max_component(coord_diff) * 2.f;
+        std::cout << "scale: " << model_scale << std::endl;
+        render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x * model_scale), static_cast<uint32_t>(coord_diff.y * model_scale)};
 
         init_window();
         init_app();
@@ -210,6 +213,7 @@ public:
     glm::vec3 min_vert_coord;
     glm::vec3 max_vert_coord;
     glm::vec3 coord_diff;
+    float model_scale;
 
     std::vector<uint32_t> indices;
     int indices_count;

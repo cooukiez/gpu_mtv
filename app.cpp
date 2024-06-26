@@ -230,7 +230,7 @@ void App::create_unif_bufs() {
     ubo.min_vert = glm::vec4(min_vert_coord, 1.0f);
     ubo.max_vert = glm::vec4(max_vert_coord, 1.0f);
     ubo.chunk_res = glm::vec4(coord_diff, 0);
-    ubo.scalar = SCALAR;
+    ubo.scalar = model_scale;
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
     unif_bufs.resize(MAX_FRAMES_IN_FLIGHT);
@@ -246,7 +246,7 @@ void App::create_unif_bufs() {
 void App::create_render_target() {
     VkExtent3D extent = {CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH};
     render_target = create_img(extent, VK_FORMAT_R8G8B8A8_UNORM,
-                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
+                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_TYPE_3D);
 
     create_img_view(&render_target, VK_IMAGE_VIEW_TYPE_3D, DEFAULT_SUBRESOURCE_RANGE);
@@ -488,10 +488,15 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
 
     vkCmdResetQueryPool(cmd_buf, query_pool, img_index * frame_query_count, frame_query_count);
 
+    constexpr VkClearColorValue render_target_clear_value = {{0.0f, 0.0f, 0.0f, 0.0f}};
+    vkCmdFillBuffer(cmd_buf, transfer_buf.buf, 0, transfer_buf.size, 0);
+
     vkCmdWriteTimestamp(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool, img_index * frame_query_count);
 
     transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
+
+    vkCmdClearColorImage(cmd_buf, render_target.img, render_target.cur_layout, &render_target_clear_value, 1, &DEFAULT_SUBRESOURCE_RANGE);
 
     vkCmdBeginRenderPass(cmd_buf, &rendp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -575,44 +580,59 @@ void App::comp_vox_grid() {
     auto *cached_output = new glm::u8vec4[CHUNK_SIZE];
     std::cout << "render extent: " << render_extent.width << "x" << render_extent.height << std::endl;
 
-    while (!glfwWindowShouldClose(window)) {
-        glfwPollEvents();
+    uint32_t sectors_finished = 0;
+    constexpr uint32_t sector_count = GRID_RESOLUTION / CHUNK_SIDE_LENGTH;
+    for (size_t i = 0; i < sector_count; i++) {
+        for (size_t j = 0; j < sector_count; j++) {
+            for (size_t k = 0; k < sector_count; k++) {
+                glfwPollEvents();
 
-        ubo.sector_start = glm::vec4(glm::vec3(256.f, 0.f, 0.f), 0.f);
-        ubo.sector_end = glm::vec4(glm::vec3(512.f), 0.f);
+                glm::vec3 sector_start = glm::vec3(i, j, k) * glm::vec3(CHUNK_SIDE_LENGTH);
+                ubo.sector_start = glm::vec4(sector_start, 0.f);
+                ubo.sector_end = glm::vec4(sector_start + glm::vec3(CHUNK_SIDE_LENGTH), 0.f);
 
-        for (const auto &unif_buf: unif_bufs)
-            memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
+                std::cout << "sector start: " << sector_start << std::endl;
 
-        auto start_time = std::chrono::high_resolution_clock::now();
-        render();
-        auto end_time = std::chrono::high_resolution_clock::now();
-        auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-        stats.frame_time = static_cast<double>(render_duration.count()) / 1000.0;
-        std::cout << "render time: " << stats.frame_time << std::endl;
+                for (const auto &unif_buf: unif_bufs)
+                    memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
 
-        cp_data_from_buf(&transfer_buf, cached_output);
+                auto start_time = std::chrono::high_resolution_clock::now();
+                render();
+                auto end_time = std::chrono::high_resolution_clock::now();
+                auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+                stats.frame_time = static_cast<double>(render_duration.count()) / 1000.0;
+                std::cout << "render time: " << stats.frame_time << "ms" << std::endl;
 
-        stats.frame_count++;
+                start_time = std::chrono::high_resolution_clock::now();
+                cp_data_from_buf(&transfer_buf, cached_output);
+
+                auto *compressed_data = new uint8_t[CHUNK_SIZE];
+
+                uint32_t vox_count = 0;
+                for (int l = 0; l < CHUNK_SIZE; l++) {
+                    vox_count += cached_output[l].a;
+                    compressed_data[l] = cached_output[l].a;
+                }
+                end_time = std::chrono::high_resolution_clock::now();
+                auto copy_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+                std::cout << "copy time: " << copy_duration.count() << "ms" << std::endl;
+
+                start_time = std::chrono::high_resolution_clock::now();
+                append_to_file("output/output.bvox", compressed_data, CHUNK_SIZE);
+                end_time = std::chrono::high_resolution_clock::now();
+                auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+                std::cout << "write time: " << write_duration.count() << "ms" << std::endl;
+                sectors_finished += 1;
+
+                std::cout << "collected " << vox_count << " voxels." << std::endl;
+                std::cout << "currently: " << sectors_finished << " / " << sector_count * sector_count * sector_count << "\n" << std::endl;
+
+                stats.frame_count++;
+            }
+        }
     }
-
-    auto *compressed_data = new uint8_t[CHUNK_SIZE];
-
-    uint32_t vox_count = 0;
-    for (int i = 0; i < CHUNK_SIZE; i++) {
-        vox_count += cached_output[i].a;
-        compressed_data[i] = cached_output[i].a;
-    }
-
-    std::cout << "collected " << vox_count << " voxels." << std::endl;
-
-    append_to_file("output/output.bvox", compressed_data, CHUNK_SIZE);
 
     vkDeviceWaitIdle(dev);
-
-    char test[] = "1234";
-    write_file("output/test.bvox", &test, 4);
-    append_to_file("output/test.bvox", &test, 4);
 }
 
 void App::clean_up() {

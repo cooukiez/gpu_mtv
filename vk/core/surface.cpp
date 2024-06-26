@@ -106,8 +106,6 @@ void App::create_swap() {
     }
     swap_img_format = surf_format.format;
     swap_extent = extent;
-
-    render_extent = swap_extent;
 }
 
 void App::clean_up_swap() {
