@@ -618,7 +618,7 @@ void App::comp_vox_grid() {
                 std::cout << "copy time: " << copy_duration.count() << "ms" << std::endl;
 
                 start_time = std::chrono::high_resolution_clock::now();
-                append_to_file("output/output.bvox", compressed_data, CHUNK_SIZE);
+
                 end_time = std::chrono::high_resolution_clock::now();
                 auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
                 std::cout << "write time: " << write_duration.count() << "ms" << std::endl;
