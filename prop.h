@@ -11,9 +11,7 @@
 #define CHUNK_SIDE_LENGTH 256
 #define CHUNK_SIZE (CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH * CHUNK_SIDE_LENGTH)
 
-#define BVOX_VERSION 1
-
-#define GRID_RESOLUTION 512
+#define GRID_RESOLUTION 256
 
 #define SECTOR_COUNT (GRID_RESOLUTION / CHUNK_SIDE_LENGTH)
 
@@ -62,58 +60,6 @@ constexpr VkImageSubresourceRange DEFAULT_SUBRESOURCE_RANGE = {
 constexpr VkImageSubresourceLayers DEFAULT_SUBRESOURCE_LAYERS = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1};
 
 constexpr VkBorderColor DEFAULT_SAMPLER_BORDER_COLOR = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
-
-#define MODEL_INDEX 4
-
-#if MODEL_INDEX == 0
-#define MODEL_PATH "models/armadillo/armadillo.obj"
-#define TEXTURE_PATH "models/armadillo/"
-#endif
-
-#if MODEL_INDEX == 1
-#define MODEL_PATH "models/bunny/bunny.obj"
-#define TEXTURE_PATH "models/bunny/"
-#endif
-
-#if MODEL_INDEX == 2
-#define MODEL_PATH "models/cornell-box/cornell-box.obj"
-#define TEXTURE_PATH "models/cornell-box/"
-#endif
-
-#if MODEL_INDEX == 3
-#define MODEL_PATH "models/cow/cow.obj"
-#define TEXTURE_PATH "models/cow/"
-#endif
-
-#if MODEL_INDEX == 4
-#define MODEL_PATH "models/dragon/dragon.obj"
-#define TEXTURE_PATH "models/dragon/"
-#endif
-
-#if MODEL_INDEX == 5
-#define MODEL_PATH "models/duck/duck.obj"
-#define TEXTURE_PATH "models/duck/"
-#endif
-
-#if MODEL_INDEX == 6
-#define MODEL_PATH "models/lucy/lucy.obj"
-#define TEXTURE_PATH "models/lucy/"
-#endif
-
-#if MODEL_INDEX == 7
-#define MODEL_PATH "models/sponza/sponza.obj"
-#define TEXTURE_PATH "models/sponza/"
-#endif
-
-#if MODEL_INDEX == 8
-#define MODEL_PATH "models/suzanne/suzanne.obj"
-#define TEXTURE_PATH "models/suzanne/"
-#endif
-
-#if MODEL_INDEX == 9
-#define MODEL_PATH "models/teapot/teapot.obj"
-#define TEXTURE_PATH "models/teapot/"
-#endif
 
 // Rasterization Stage
 constexpr VkPolygonMode POLYGON_MODE = VK_POLYGON_MODE_FILL;

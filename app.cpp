@@ -3,11 +3,66 @@
 //
 
 #include "app.h"
+#include "vss/include/bvox.h"
 
 #define STB_IMAGE_IMPLEMENTATION
+
 #include <stb_image.h>
 
 #define TINYOBJLOADER_IMPLEMENTATION
+
+
+#define MODEL_INDEX 9
+
+#if MODEL_INDEX == 0
+#define MODEL_PATH "models/armadillo/armadillo.obj"
+#define TEXTURE_PATH "models/armadillo/"
+#endif
+
+#if MODEL_INDEX == 1
+#define MODEL_PATH "models/bunny/bunny.obj"
+#define TEXTURE_PATH "models/bunny/"
+#endif
+
+#if MODEL_INDEX == 2
+#define MODEL_PATH "models/cornell-box/cornell-box.obj"
+#define TEXTURE_PATH "models/cornell-box/"
+#endif
+
+#if MODEL_INDEX == 3
+#define MODEL_PATH "models/cow/cow.obj"
+#define TEXTURE_PATH "models/cow/"
+#endif
+
+#if MODEL_INDEX == 4
+#define MODEL_PATH "models/dragon/dragon.obj"
+#define TEXTURE_PATH "models/dragon/"
+#endif
+
+#if MODEL_INDEX == 5
+#define MODEL_PATH "models/duck/duck.obj"
+#define TEXTURE_PATH "models/duck/"
+#endif
+
+#if MODEL_INDEX == 6
+#define MODEL_PATH "models/lucy/lucy.obj"
+#define TEXTURE_PATH "models/lucy/"
+#endif
+
+#if MODEL_INDEX == 7
+#define MODEL_PATH "models/sponza/sponza.obj"
+#define TEXTURE_PATH "models/sponza/"
+#endif
+
+#if MODEL_INDEX == 8
+#define MODEL_PATH "models/suzanne/suzanne.obj"
+#define TEXTURE_PATH "models/suzanne/"
+#endif
+
+#if MODEL_INDEX == 9
+#define MODEL_PATH "models/teapot/teapot.obj"
+#define TEXTURE_PATH "models/teapot/"
+#endif
 
 void App::load_model() {
     std::string warn, err;
@@ -32,26 +87,26 @@ void App::load_model() {
                 Vertex vertex{};
 
                 vertex.pos = {
-                    attrib.vertices[3 * index.vertex_index + 0],
-                    attrib.vertices[3 * index.vertex_index + 1],
-                    attrib.vertices[3 * index.vertex_index + 2]
+                        attrib.vertices[3 * index.vertex_index + 0],
+                        attrib.vertices[3 * index.vertex_index + 1],
+                        attrib.vertices[3 * index.vertex_index + 2]
                 };
 
                 min_vert_coord = glm::min(min_vert_coord, vertex.pos);
                 max_vert_coord = glm::max(max_vert_coord, vertex.pos);
 
                 vertex.normal = {
-                    attrib.normals[3 * index.normal_index + 0],
-                    attrib.normals[3 * index.normal_index + 1],
-                    attrib.normals[3 * index.normal_index + 2]
+                        attrib.normals[3 * index.normal_index + 0],
+                        attrib.normals[3 * index.normal_index + 1],
+                        attrib.normals[3 * index.normal_index + 2]
                 };
 
                 if (!materials.empty()) {
                     tinyobj::real_t *color = materials[mat_id].diffuse;
                     vertex.color = {
-                        color[0],
-                        color[1],
-                        color[2]
+                            color[0],
+                            color[1],
+                            color[2]
                     };
                 } else {
                     vertex.color = {1.0f, 1.0f, 1.0f};
@@ -60,8 +115,8 @@ void App::load_model() {
 
                 if (!attrib.texcoords.empty()) {
                     vertex.uv = {
-                        attrib.texcoords[2 * index.texcoord_index + 0],
-                        1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
+                            attrib.texcoords[2 * index.texcoord_index + 0],
+                            1.0f - attrib.texcoords[2 * index.texcoord_index + 1]
                     };
                 }
 
@@ -229,7 +284,7 @@ void App::create_unif_bufs() {
 
     ubo.min_vert = glm::vec4(min_vert_coord, 1.0f);
     ubo.max_vert = glm::vec4(max_vert_coord, 1.0f);
-    ubo.chunk_res = glm::vec4(coord_diff, 0);
+    ubo.chunk_res = glm::vec4(glm::vec3(CHUNK_SIDE_LENGTH), 0);
     ubo.scalar = model_scale;
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
@@ -245,13 +300,14 @@ void App::create_unif_bufs() {
 
 void App::create_render_target() {
     VkExtent3D extent = {CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH};
-    render_target = create_img(extent, VK_FORMAT_R8G8B8A8_UNORM,
-                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+    render_target = create_img(extent, VK_FORMAT_R8_UINT,
+                               VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+                               VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                                VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_TYPE_3D);
 
     create_img_view(&render_target, VK_IMAGE_VIEW_TYPE_3D, DEFAULT_SUBRESOURCE_RANGE);
 
-    VkDeviceSize size = CHUNK_SIZE * sizeof(glm::u8vec4);
+    VkDeviceSize size = CHUNK_SIZE * sizeof(uint8_t);
     transfer_buf = create_buf(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
@@ -391,8 +447,8 @@ void App::create_pipe() {
     viewport_info.scissorCount = 1;
 
     std::vector<VkDynamicState> dynamic_states = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
     };
 
     VkPipelineDynamicStateCreateInfo dynamic_state_info{};
@@ -496,7 +552,8 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
     transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-    vkCmdClearColorImage(cmd_buf, render_target.img, render_target.cur_layout, &render_target_clear_value, 1, &DEFAULT_SUBRESOURCE_RANGE);
+    vkCmdClearColorImage(cmd_buf, render_target.img, render_target.cur_layout, &render_target_clear_value, 1,
+                         &DEFAULT_SUBRESOURCE_RANGE);
 
     vkCmdBeginRenderPass(cmd_buf, &rendp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -566,71 +623,56 @@ void App::fetch_queries(const uint32_t img_index) {
 
 void App::comp_vox_grid() {
     chunk_module.init(min_vert_coord, max_vert_coord);
-    chunk_module.axis_scaler = {1.f, 1.f, .5f};
+    chunk_module.axis_scalar = {1.f, 1.f, .5f};
     chunk_module.update_proj();
 
-    write_file("output/output.bvox", nullptr, 0);
-    constexpr char bvox_version = BVOX_VERSION;
-    constexpr uint32_t chunk_side_length = CHUNK_SIDE_LENGTH;
-    constexpr uint32_t chunk_size = CHUNK_SIZE;
-    append_to_file("output/output.bvox", &bvox_version, sizeof(bvox_version));
-    append_to_file("output/output.bvox", &chunk_side_length, sizeof(chunk_side_length));
-    append_to_file("output/output.bvox", &chunk_size, sizeof(chunk_size));
-
-    auto *cached_output = new glm::u8vec4[CHUNK_SIZE];
+    std::vector<uint8_t> cached_output(CHUNK_SIZE);
     std::cout << "render extent: " << render_extent.width << "x" << render_extent.height << std::endl;
 
-    uint32_t sectors_finished = 0;
-    constexpr uint32_t sector_count = GRID_RESOLUTION / CHUNK_SIDE_LENGTH;
-    for (size_t i = 0; i < sector_count; i++) {
-        for (size_t j = 0; j < sector_count; j++) {
-            for (size_t k = 0; k < sector_count; k++) {
-                glfwPollEvents();
+    BvoxHeader header{};
+    header.chunk_res = CHUNK_SIDE_LENGTH;
+    header.chunk_size = CHUNK_SIZE;
 
-                glm::vec3 sector_start = glm::vec3(i, j, k) * glm::vec3(CHUNK_SIDE_LENGTH);
-                ubo.sector_start = glm::vec4(sector_start, 0.f);
-                ubo.sector_end = glm::vec4(sector_start + glm::vec3(CHUNK_SIDE_LENGTH), 0.f);
+    write_empty_bvox("output.bvox", header);
 
-                std::cout << "sector start: " << sector_start << std::endl;
+    glfwPollEvents();
+    ubo.sector_start = glm::vec4(glm::vec3(0.f), 0.f);
+    ubo.sector_end = glm::vec4(glm::vec3(CHUNK_SIDE_LENGTH), 0.f);
 
-                for (const auto &unif_buf: unif_bufs)
-                    memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
+    for (const auto &unif_buf: unif_bufs)
+        memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
 
-                auto start_time = std::chrono::high_resolution_clock::now();
-                render();
-                auto end_time = std::chrono::high_resolution_clock::now();
-                auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-                stats.frame_time = static_cast<double>(render_duration.count()) / 1000.0;
-                std::cout << "render time: " << stats.frame_time << "ms" << std::endl;
 
-                start_time = std::chrono::high_resolution_clock::now();
-                cp_data_from_buf(&transfer_buf, cached_output);
+    auto start_time = std::chrono::high_resolution_clock::now();
+    render();
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    stats.frame_time = static_cast<double>(render_duration.count()) / 1000.0;
+    std::cout << "render time: " << stats.frame_time << "ms" << std::endl;
 
-                auto *compressed_data = new uint8_t[CHUNK_SIZE];
 
-                uint32_t vox_count = 0;
-                for (int l = 0; l < CHUNK_SIZE; l++) {
-                    vox_count += cached_output[l].a;
-                    compressed_data[l] = cached_output[l].a;
-                }
-                end_time = std::chrono::high_resolution_clock::now();
-                auto copy_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-                std::cout << "copy time: " << copy_duration.count() << "ms" << std::endl;
+    start_time = std::chrono::high_resolution_clock::now();
+    cp_data_from_buf(&transfer_buf, cached_output.data());
 
-                start_time = std::chrono::high_resolution_clock::now();
-
-                end_time = std::chrono::high_resolution_clock::now();
-                auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-                std::cout << "write time: " << write_duration.count() << "ms" << std::endl;
-                sectors_finished += 1;
-
-                std::cout << "collected " << vox_count << " voxels." << std::endl;
-                std::cout << "currently: " << sectors_finished << " / " << sector_count * sector_count * sector_count << "\n" << std::endl;
-
-                stats.frame_count++;
-            }
+    uint32_t vox_count = 0;
+    for (int l = 0; l < CHUNK_SIZE; l++) {
+        if (cached_output[l] > 0) {
+            // std::cout << cached_output[l] << " at " << l << std::endl;
+            vox_count++;
         }
     }
+    std::cout << "voxel count: " << vox_count << std::endl;
+
+    end_time = std::chrono::high_resolution_clock::now();
+    auto copy_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << "copy time: " << copy_duration.count() << "ms" << std::endl;
+
+
+    start_time = std::chrono::high_resolution_clock::now();
+    append_to_bvox("output.bvox", cached_output);
+    end_time = std::chrono::high_resolution_clock::now();
+    auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    std::cout << "write time: " << write_duration.count() << "ms" << std::endl;
 
     vkDeviceWaitIdle(dev);
 }

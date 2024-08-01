@@ -8,6 +8,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /std:c++20")
 
 set(IMGUI_DIR imgui)
+set(VSS_DIR vss)
 
 file(GLOB MAIN_SOURCES *.cpp)
 file(GLOB_RECURSE VK_SOURCES vk/*.cpp)
@@ -41,6 +42,7 @@ target_sources(main PRIVATE
         ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp)
 
 target_include_directories(main PRIVATE ${IMGUI_DIR})
+target_include_directories(main PRIVATE ${VSS_DIR}/include)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
     message(STATUS "Detected MinGW compiler.")

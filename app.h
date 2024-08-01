@@ -63,7 +63,7 @@ template<>
 struct std::hash<Vertex> {
     size_t operator()(Vertex const &vertex) const noexcept {
         return ((hash<glm::vec3>()(vertex.pos) ^ (hash<glm::vec3>()(vertex.normal) << 1)) >> 1) ^ (
-                   hash<glm::vec2>()(vertex.uv) << 1);
+                hash<glm::vec2>()(vertex.uv) << 1);
     }
 };
 
@@ -117,7 +117,7 @@ struct VCW_OrthographicChunkModule {
     glm::vec3 max_coord;
     glm::vec3 coord_diff;
 
-    glm::vec3 axis_scaler = {1.f, 1.f, 1.f};
+    glm::vec3 axis_scalar = {1.f, 1.f, 1.f};
 
     void init(const glm::vec3 loc_min_coord, const glm::vec3 loc_max_coord) {
         min_coord = loc_min_coord;
@@ -128,11 +128,34 @@ struct VCW_OrthographicChunkModule {
     }
 
     void update_proj() {
-        const glm::mat4 ortho_mat = glm::ortho(0.f, coord_diff.x * axis_scaler.x,
-                                               0.f, coord_diff.y * axis_scaler.y,
-                                               0.f, coord_diff.z * axis_scaler.z);
+        const glm::mat4 ortho_mat_v1 = glm::ortho(0.f, coord_diff.x * axis_scalar.x,
+                                                  0.f, coord_diff.y * axis_scalar.y,
+                                                  0.f, coord_diff.z * axis_scalar.z);
 
-        proj = ortho_mat * trans_mat;
+        float max_max = max_component(max_coord);
+        float min_max = max_component(min_coord);
+
+        const glm::mat4 ortho_mat_v2 = glm::ortho(min_coord.x * (min_max / min_coord.x),
+                                                  max_coord.x * (max_max / max_coord.x),
+                                                  min_coord.y * (min_max / min_coord.y),
+                                                  max_coord.y * (max_max / max_coord.y),
+                                                  min_coord.z * (min_max / min_coord.z),
+                                                  max_coord.z * (max_max / max_coord.z));
+
+        float coord_diff_max = max_component(coord_diff);
+
+        float scale_z = coord_diff.z / coord_diff_max;
+        float scale_x = coord_diff.x / coord_diff_max;
+        float scale_y = coord_diff.y / coord_diff_max * 2.f;
+        std::cout << "scale_z: " << scale_z << std::endl;
+
+        const glm::mat4 ortho_mat_v3 = glm::ortho(min_coord.x, max_coord.x,
+                                                  min_coord.y, max_coord.y,
+                                                  0.f, coord_diff.z * .75f);
+
+        glm::mat4 trans_mat_v2 = glm::translate(glm::mat4(1.f), -glm::vec3(0.f, 0.f, min_coord.z + max_coord.z));
+
+        proj = ortho_mat_v3; // * trans_mat_v2;
     }
 };
 
@@ -147,9 +170,11 @@ public:
     void run() {
         load_model();
 
-        model_scale = GRID_RESOLUTION / max_component(coord_diff) * 2.f;
+        model_scale = GRID_RESOLUTION / max_component(coord_diff) * 4.f;
         std::cout << "scale: " << model_scale << std::endl;
-        render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x * model_scale), static_cast<uint32_t>(coord_diff.y * model_scale)};
+        std::cout << "test: " << coord_diff.z / GRID_RESOLUTION;
+        // render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x), static_cast<uint32_t>(coord_diff.y)};
+        render_extent = VkExtent2D{256, 256};
 
         init_window();
         init_app();
