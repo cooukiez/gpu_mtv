@@ -36,8 +36,4 @@
 #include <sstream>
 #include <functional>
 
-#include "imgui.h"
-#include "backends/imgui_impl_glfw.h"
-#include "backends/imgui_impl_vulkan.h"
-
 #include "vss.h"

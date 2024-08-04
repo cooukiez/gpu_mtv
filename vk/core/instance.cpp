@@ -4,21 +4,8 @@
 
 #include "../../app.h"
 
-void App::init_window() {
-    glfwInit();
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    window = glfwCreateWindow(static_cast<int>(render_extent.width), static_cast<int>(render_extent.height),
-                              WINDOW_TITLE, nullptr, nullptr);
-    glfwSetWindowUserPointer(window, this);
-}
-
 std::vector<const char *> App::get_required_exts() {
-    uint32_t glfw_ext_count = 0;
-    const char **glfw_exts = glfwGetRequiredInstanceExtensions(&glfw_ext_count);
-    std::vector<const char *> exts(glfw_exts, glfw_exts + glfw_ext_count);
+    std::vector<const char *> exts;
 
 #ifdef VALIDATION
     exts.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);

@@ -32,16 +32,6 @@ target_link_libraries(main tinyobjloader::tinyobjloader)
 
 target_include_directories(main PRIVATE ${Stb_INCLUDE_DIR})
 
-target_sources(main PRIVATE
-        ${IMGUI_DIR}/imgui.cpp
-        ${IMGUI_DIR}/imgui_draw.cpp
-        ${IMGUI_DIR}/imgui_widgets.cpp
-        ${IMGUI_DIR}/imgui_tables.cpp
-        ${IMGUI_DIR}/imgui_demo.cpp
-        ${IMGUI_DIR}/backends/imgui_impl_vulkan.cpp
-        ${IMGUI_DIR}/backends/imgui_impl_glfw.cpp)
-
-target_include_directories(main PRIVATE ${IMGUI_DIR})
 target_include_directories(main PRIVATE ${VSS_DIR}/include)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")

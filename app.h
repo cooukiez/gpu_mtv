@@ -30,17 +30,10 @@ bool check_validation_support();
 
 struct VCW_QueueFamilyIndices {
     std::optional<uint32_t> qf_graph;
-    std::optional<uint32_t> qf_pres;
 
     bool is_complete() const {
-        return qf_graph.has_value() && qf_pres.has_value();
+        return qf_graph.has_value();
     }
-};
-
-struct VCW_SwapSupport {
-    VkSurfaceCapabilitiesKHR caps;
-    std::vector<VkSurfaceFormatKHR> formats;
-    std::vector<VkPresentModeKHR> pres_modes;
 };
 
 struct Vertex {
@@ -170,29 +163,15 @@ public:
     void run() {
         load_model();
 
-        model_scale = GRID_RESOLUTION / max_component(coord_diff) * 4.f;
-        std::cout << "scale: " << model_scale << std::endl;
-        std::cout << "test: " << coord_diff.z / GRID_RESOLUTION;
-        // render_extent = VkExtent2D{static_cast<uint32_t>(coord_diff.x), static_cast<uint32_t>(coord_diff.y)};
         render_extent = VkExtent2D{256, 256};
 
-        init_window();
         init_app();
         comp_vox_grid();
         clean_up();
     }
 
-    GLFWwindow *window;
-    bool resized = false;
-    glm::vec2 mouse_pos;
-    bool cursor_enabled = false;
-    glm::ivec2 window_dim;
-    glm::ivec2 window_pos;
-
     VkInstance inst;
     VkDebugUtilsMessengerEXT debug_msg;
-
-    VkSurfaceKHR surf;
 
     VkPhysicalDevice phy_dev = VK_NULL_HANDLE;
     VkPhysicalDeviceMemoryProperties phy_dev_mem_props;
@@ -202,19 +181,12 @@ public:
     VCW_QueueFamilyIndices qf_indices;
     VkDevice dev;
     VkQueue q_graph;
-    VkQueue q_pres;
 
-    VkSwapchainKHR swap;
-    std::vector<VCW_Image> swap_imgs;
-    VkFormat swap_img_format;
-    VkExtent2D swap_extent;
     VkExtent2D render_extent;
 
     VkRenderPass rendp;
     VkPipelineLayout pipe_layout;
     VkPipeline pipe;
-    std::vector<VkFramebuffer> frame_bufs;
-    std::vector<VCW_Image> render_targets;
 
     std::vector<VkDescriptorSetLayout> desc_set_layouts;
     std::vector<VkDescriptorPoolSize> desc_pool_sizes;
@@ -255,10 +227,6 @@ public:
     VCW_Uniform ubo;
     std::vector<VCW_Buffer> unif_bufs;
 
-    std::vector<VkSemaphore> img_avl_semps;
-    std::vector<VkSemaphore> rend_fin_semps;
-    std::vector<VkFence> fens;
-
     uint32_t cur_frame = 0;
     VCW_RenderStats stats;
     VCW_RenderStats readable_stats;
@@ -279,16 +247,7 @@ public:
     void clean_up();
 
     //
-    // window
-    //
-    static void frame_buf_resized(GLFWwindow *window, int width, int height);
-
-    static void cursor_callback(GLFWwindow *window, double nx, double ny);
-
-    void init_window();
-
-    //
-    // vulkan / imgui instance
+    // vulkan instance
     //
     static std::vector<const char *> get_required_exts();
 
@@ -300,11 +259,6 @@ public:
     //
     // vulkan primitives
     //
-    // surface
-    //
-    void create_surf();
-
-    //
     // physical device
     //
     static std::vector<VkQueueFamilyProperties> get_qf_props(VkPhysicalDevice loc_phy_dev);
@@ -312,8 +266,6 @@ public:
     VCW_QueueFamilyIndices find_qf(VkPhysicalDevice loc_phy_dev) const;
 
     static bool check_phy_dev_ext_support(VkPhysicalDevice loc_phy_dev);
-
-    VCW_SwapSupport query_swap_support(VkPhysicalDevice loc_phy_dev) const;
 
     bool is_phy_dev_suitable(VkPhysicalDevice loc_phy_dev) const;
 
@@ -323,19 +275,6 @@ public:
     // logical device
     //
     void create_dev();
-
-    //
-    // swapchain
-    //
-    static VkSurfaceFormatKHR choose_surf_format(const std::vector<VkSurfaceFormatKHR> &available);
-
-    static VkPresentModeKHR choose_pres_mode(const std::vector<VkPresentModeKHR> &available);
-
-    VkExtent2D choose_extent(const VkSurfaceCapabilitiesKHR &caps) const;
-
-    void create_swap();
-
-    void clean_up_swap();
 
     //
     // buffers
@@ -445,8 +384,6 @@ public:
 
     VkShaderModule create_shader_mod(const std::vector<char> &code) const;
 
-    void create_frame_bufs(const std::vector<VCW_Image> &img_targets);
-
     void clean_up_pipe() const;
 
     //
@@ -461,8 +398,6 @@ public:
     void end_single_time_cmd(VkCommandBuffer cmd_buf) const;
 
     void create_cmd_bufs();
-
-    void create_sync();
 
     void create_query_pool(uint32_t loc_frame_query_count);
 
@@ -503,4 +438,4 @@ public:
     void fetch_queries(uint32_t img_index);
 };
 
-#endif //VCW_A
+#endif //VCW_APP_H

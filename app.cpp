@@ -147,12 +147,9 @@ void App::init_app() {
     //
     create_inst();
     setup_debug_msg();
-    create_surf();
 
     pick_phy_dev();
     create_dev();
-
-    create_swap();
 
     //
     // pipeline creation
@@ -171,8 +168,6 @@ void App::init_app() {
 
     create_render_target();
 
-    create_frame_bufs(swap_imgs);
-
     create_desc_pool_layout();
     create_pipe();
 
@@ -180,9 +175,6 @@ void App::init_app() {
     write_desc_pool();
 
     create_cmd_bufs();
-    create_sync();
-
-    create_query_pool(2);
 }
 
 void App::create_vert_buf() {
@@ -441,21 +433,6 @@ void App::create_pipe() {
     blend_info.blendConstants[2] = 0.0f;
     blend_info.blendConstants[3] = 0.0f;
 
-    VkPipelineViewportStateCreateInfo viewport_info{};
-    viewport_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewport_info.viewportCount = 1;
-    viewport_info.scissorCount = 1;
-
-    std::vector<VkDynamicState> dynamic_states = {
-            VK_DYNAMIC_STATE_VIEWPORT,
-            VK_DYNAMIC_STATE_SCISSOR
-    };
-
-    VkPipelineDynamicStateCreateInfo dynamic_state_info{};
-    dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamic_state_info.dynamicStateCount = static_cast<uint32_t>(dynamic_states.size());
-    dynamic_state_info.pDynamicStates = dynamic_states.data();
-
     VkPushConstantRange push_const_range{};
     push_const_range.stageFlags = PUSH_CONSTANTS_STAGE;
     push_const_range.offset = 0;
@@ -480,8 +457,6 @@ void App::create_pipe() {
     pipe_info.pRasterizationState = &raster_info;
     pipe_info.pMultisampleState = &multisample_info;
     pipe_info.pColorBlendState = &blend_info;
-    pipe_info.pViewportState = &viewport_info;
-    pipe_info.pDynamicState = &dynamic_state_info;
     pipe_info.layout = pipe_layout;
     pipe_info.renderPass = rendp;
     pipe_info.subpass = 0;
@@ -529,49 +504,12 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
     if (vkBeginCommandBuffer(cmd_buf, &begin_info) != VK_SUCCESS)
         throw std::runtime_error("failed to begin recording command buffer.");
 
-    VkRenderPassBeginInfo rendp_begin_info{};
-    rendp_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rendp_begin_info.renderPass = rendp;
-    rendp_begin_info.framebuffer = frame_bufs[img_index];
-    rendp_begin_info.renderArea.offset = {0, 0};
-    rendp_begin_info.renderArea.extent = render_extent;
-
-    std::array<VkClearValue, 1> clear_values{};
-    clear_values[0].color = {{0.0f, 0.0f, 0.0f, 1.0f}};
-
-    rendp_begin_info.clearValueCount = static_cast<uint32_t>(clear_values.size());
-    rendp_begin_info.pClearValues = clear_values.data();
-
-    vkCmdResetQueryPool(cmd_buf, query_pool, img_index * frame_query_count, frame_query_count);
-
-    constexpr VkClearColorValue render_target_clear_value = {{0.0f, 0.0f, 0.0f, 0.0f}};
     vkCmdFillBuffer(cmd_buf, transfer_buf.buf, 0, transfer_buf.size, 0);
-
-    vkCmdWriteTimestamp(cmd_buf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, query_pool, img_index * frame_query_count);
 
     transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
-    vkCmdClearColorImage(cmd_buf, render_target.img, render_target.cur_layout, &render_target_clear_value, 1,
-                         &DEFAULT_SUBRESOURCE_RANGE);
-
-    vkCmdBeginRenderPass(cmd_buf, &rendp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
-
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(render_extent.width);
-    viewport.height = static_cast<float>(render_extent.height);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
-
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = render_extent;
-    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
     const VkBuffer vert_bufs[] = {vert_buf.buf};
     constexpr VkDeviceSize offsets[] = {0};
@@ -678,8 +616,6 @@ void App::comp_vox_grid() {
 }
 
 void App::clean_up() {
-    clean_up_swap();
-
     clean_up_pipe();
     clean_up_desc();
 
@@ -698,10 +634,6 @@ void App::clean_up() {
     clean_up_buf(vert_buf);
     clean_up_buf(index_buf);
 
-    vkDestroyQueryPool(dev, query_pool, nullptr);
-
-    clean_up_sync();
-
     vkDestroyCommandPool(dev, cmd_pool, nullptr);
     vkDestroyDevice(dev, nullptr);
 
@@ -709,10 +641,5 @@ void App::clean_up() {
     destroy_debug_callback(inst, debug_msg, nullptr);
 #endif
 
-    vkDestroySurfaceKHR(inst, surf, nullptr);
     vkDestroyInstance(inst, nullptr);
-
-    glfwDestroyWindow(window);
-
-    glfwTerminate();
 }

@@ -24,12 +24,6 @@ VCW_QueueFamilyIndices App::find_qf(VkPhysicalDevice loc_phy_dev) const {
         if (qf.queueFlags & VK_QUEUE_GRAPHICS_BIT && qf.timestampValidBits)
             loc_qf_indices.qf_graph = i;
 
-        VkBool32 pres_support = false;
-        vkGetPhysicalDeviceSurfaceSupportKHR(loc_phy_dev, i, surf, &pres_support);
-
-        if (pres_support)
-            loc_qf_indices.qf_pres = i;
-
         if (loc_qf_indices.is_complete())
             break;
 
@@ -54,45 +48,15 @@ bool App::check_phy_dev_ext_support(VkPhysicalDevice loc_phy_dev) {
     return required_exts.empty();
 }
 
-VCW_SwapSupport App::query_swap_support(VkPhysicalDevice loc_phy_dev) const {
-    VCW_SwapSupport support;
-
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(loc_phy_dev, surf, &support.caps);
-
-    uint32_t format_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(loc_phy_dev, surf, &format_count, nullptr);
-
-    if (format_count != 0) {
-        support.formats.resize(format_count);
-        vkGetPhysicalDeviceSurfaceFormatsKHR(loc_phy_dev, surf, &format_count, support.formats.data());
-    }
-
-    uint32_t pres_mode_count;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(loc_phy_dev, surf, &pres_mode_count, nullptr);
-
-    if (pres_mode_count != 0) {
-        support.pres_modes.resize(pres_mode_count);
-        vkGetPhysicalDeviceSurfacePresentModesKHR(loc_phy_dev, surf, &pres_mode_count, support.pres_modes.data());
-    }
-
-    return support;
-}
-
 bool App::is_phy_dev_suitable(VkPhysicalDevice loc_phy_dev) const {
     VCW_QueueFamilyIndices loc_qf_indices = find_qf(loc_phy_dev);
 
     bool exts_supported = check_phy_dev_ext_support(loc_phy_dev);
 
-    bool swap_adequate = false;
-    if (exts_supported) {
-        VCW_SwapSupport swap_support = query_swap_support(loc_phy_dev);
-        swap_adequate = !swap_support.formats.empty() && !swap_support.pres_modes.empty();
-    }
-
     VkPhysicalDeviceFeatures features;
     vkGetPhysicalDeviceFeatures(loc_phy_dev, &features);
 
-    return loc_qf_indices.is_complete() && exts_supported && swap_adequate
+    return loc_qf_indices.is_complete() && exts_supported
            && features.samplerAnisotropy && features.geometryShader
            && features.fragmentStoresAndAtomics && features.vertexPipelineStoresAndAtomics;
 }
@@ -125,7 +89,7 @@ void App::create_dev() {
     qf_indices = find_qf(phy_dev);
 
     std::vector<VkDeviceQueueCreateInfo> queue_infos;
-    const std::set<uint32_t> q_families = {qf_indices.qf_graph.value(), qf_indices.qf_pres.value()};
+    const std::set<uint32_t> q_families = {qf_indices.qf_graph.value()};
 
     constexpr float q_prior = 1.0f;
     for (const uint32_t family: q_families) {
@@ -166,5 +130,4 @@ void App::create_dev() {
 
     qf_props = get_qf_props(phy_dev);
     vkGetDeviceQueue(dev, qf_indices.qf_graph.value(), 0, &q_graph);
-    vkGetDeviceQueue(dev, qf_indices.qf_pres.value(), 0, &q_pres);
 }
