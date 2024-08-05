@@ -12,7 +12,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 
 
-#define MODEL_INDEX 9
+#define MODEL_INDEX 1
 
 #if MODEL_INDEX == 0
 #define MODEL_PATH "models/armadillo/armadillo.obj"
@@ -155,6 +155,7 @@ void App::init_app() {
     // pipeline creation
     //
     create_rendp();
+    create_frame_buf();
 
     create_cmd_pool();
 
@@ -170,6 +171,8 @@ void App::init_app() {
 
     create_desc_pool_layout();
     create_pipe();
+
+    create_sync();
 
     create_desc_pool(MAX_FRAMES_IN_FLIGHT);
     write_desc_pool();
@@ -401,6 +404,11 @@ void App::create_pipe() {
     input_asm_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     input_asm_info.primitiveRestartEnable = VK_FALSE;
 
+    VkPipelineViewportStateCreateInfo viewport_info{};
+    viewport_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+    viewport_info.viewportCount = 1;
+    viewport_info.scissorCount = 1;
+
     VkPipelineRasterizationStateCreateInfo raster_info{};
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.depthClampEnable = VK_FALSE;
@@ -433,6 +441,16 @@ void App::create_pipe() {
     blend_info.blendConstants[2] = 0.0f;
     blend_info.blendConstants[3] = 0.0f;
 
+    std::vector<VkDynamicState> dynamic_states = {
+            VK_DYNAMIC_STATE_VIEWPORT,
+            VK_DYNAMIC_STATE_SCISSOR
+    };
+
+    VkPipelineDynamicStateCreateInfo dynamic_state_info{};
+    dynamic_state_info.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamic_state_info.dynamicStateCount = static_cast<uint32_t>(dynamic_states.size());
+    dynamic_state_info.pDynamicStates = dynamic_states.data();
+
     VkPushConstantRange push_const_range{};
     push_const_range.stageFlags = PUSH_CONSTANTS_STAGE;
     push_const_range.offset = 0;
@@ -454,9 +472,11 @@ void App::create_pipe() {
     pipe_info.pStages = stages.data();
     pipe_info.pVertexInputState = &vert_input_info;
     pipe_info.pInputAssemblyState = &input_asm_info;
+    pipe_info.pViewportState = &viewport_info;
     pipe_info.pRasterizationState = &raster_info;
     pipe_info.pMultisampleState = &multisample_info;
     pipe_info.pColorBlendState = &blend_info;
+    pipe_info.pDynamicState = &dynamic_state_info;
     pipe_info.layout = pipe_layout;
     pipe_info.renderPass = rendp;
     pipe_info.subpass = 0;
@@ -497,26 +517,47 @@ void App::update_bufs(const uint32_t index_inflight_frame) {
     push_const.time = stats.frame_count;
 }
 
-void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
+void App::record_cmd_buf(VkCommandBuffer cmd_buf) {
     VkCommandBufferBeginInfo begin_info{};
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
     if (vkBeginCommandBuffer(cmd_buf, &begin_info) != VK_SUCCESS)
         throw std::runtime_error("failed to begin recording command buffer.");
 
+    VkRenderPassBeginInfo rendp_begin_info{};
+    rendp_begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rendp_begin_info.renderPass = rendp;
+    rendp_begin_info.framebuffer = frame_buf;
+    rendp_begin_info.renderArea.offset = {0, 0};
+    rendp_begin_info.renderArea.extent = render_extent;
+
     vkCmdFillBuffer(cmd_buf, transfer_buf.buf, 0, transfer_buf.size, 0);
 
     transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_GENERAL, VK_ACCESS_SHADER_WRITE_BIT,
                           VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
 
+    vkCmdBeginRenderPass(cmd_buf, &rendp_begin_info, VK_SUBPASS_CONTENTS_INLINE);
     vkCmdBindPipeline(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(render_extent.width);
+    viewport.height = static_cast<float>(render_extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+    vkCmdSetViewport(cmd_buf, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = render_extent;
+    vkCmdSetScissor(cmd_buf, 0, 1, &scissor);
 
     const VkBuffer vert_bufs[] = {vert_buf.buf};
     constexpr VkDeviceSize offsets[] = {0};
     vkCmdBindVertexBuffers(cmd_buf, 0, 1, vert_bufs, offsets);
 
     vkCmdBindIndexBuffer(cmd_buf, index_buf.buf, 0, VK_INDEX_TYPE_UINT32);
-
     vkCmdBindDescriptorSets(cmd_buf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipe_layout, 0, 1,
                             &desc_sets[cur_frame], 0, nullptr);
     vkCmdPushConstants(cmd_buf, pipe_layout, VK_SHADER_STAGE_ALL_GRAPHICS, 0, sizeof(VCW_PushConstants),
@@ -525,8 +566,6 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
     vkCmdDrawIndexed(cmd_buf, static_cast<uint32_t>(indices_count), 1, 0, 0, 0);
 
     vkCmdEndRenderPass(cmd_buf);
-
-    vkCmdWriteTimestamp(cmd_buf, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, query_pool, img_index * frame_query_count + 1);
 
     transition_img_layout(cmd_buf, &render_target, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_ACCESS_TRANSFER_READ_BIT,
                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT);
@@ -541,22 +580,6 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf, const uint32_t img_index) {
 
     if (vkEndCommandBuffer(cmd_buf) != VK_SUCCESS)
         throw std::runtime_error("failed to record command buffer.");
-}
-
-void App::fetch_queries(const uint32_t img_index) {
-    std::vector<uint64_t> buffer(frame_query_count);
-
-    const VkResult result = vkGetQueryPoolResults(dev, query_pool, img_index * frame_query_count, frame_query_count,
-                                                  sizeof(uint64_t) * frame_query_count, buffer.data(), sizeof(uint64_t),
-                                                  VK_QUERY_RESULT_64_BIT);
-    if (result == VK_NOT_READY) {
-        return;
-    } else if (result == VK_SUCCESS) {
-        stats.gpu_frame_time = static_cast<float>(buffer[1] - buffer[0]) * phy_dev_props.limits.timestampPeriod /
-                               1000000.0f;
-    } else {
-        throw std::runtime_error("failed to receive query results.");
-    }
 }
 
 void App::comp_vox_grid() {
@@ -630,6 +653,11 @@ void App::clean_up() {
     vkDestroySampler(dev, sampler, nullptr);
 
     clean_up_img(render_target);
+
+    vkDestroyFramebuffer(dev, frame_buf, nullptr);
+    vkDestroyRenderPass(dev, rendp, nullptr);
+
+    clean_up_sync();
 
     clean_up_buf(vert_buf);
     clean_up_buf(index_buf);

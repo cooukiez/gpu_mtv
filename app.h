@@ -185,6 +185,7 @@ public:
     VkExtent2D render_extent;
 
     VkRenderPass rendp;
+    VkFramebuffer frame_buf;
     VkPipelineLayout pipe_layout;
     VkPipeline pipe;
 
@@ -226,6 +227,8 @@ public:
 
     VCW_Uniform ubo;
     std::vector<VCW_Buffer> unif_bufs;
+
+    std::vector<VkFence> fens;
 
     uint32_t cur_frame = 0;
     VCW_RenderStats stats;
@@ -384,6 +387,8 @@ public:
 
     VkShaderModule create_shader_mod(const std::vector<char> &code) const;
 
+    void create_frame_buf();
+
     void clean_up_pipe() const;
 
     //
@@ -399,7 +404,7 @@ public:
 
     void create_cmd_bufs();
 
-    void create_query_pool(uint32_t loc_frame_query_count);
+    void create_sync();
 
     void render();
 
@@ -421,8 +426,6 @@ public:
 
     void create_textures();
 
-    void create_depth_resources();
-
     void create_render_target();
 
     void create_desc_pool_layout();
@@ -433,9 +436,7 @@ public:
 
     void update_bufs(uint32_t index_inflight_frame);
 
-    void record_cmd_buf(VkCommandBuffer cmd_buf, uint32_t img_index);
-
-    void fetch_queries(uint32_t img_index);
+    void record_cmd_buf(VkCommandBuffer cmd_buf);
 };
 
 #endif //VCW_APP_H

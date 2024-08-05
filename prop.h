@@ -31,7 +31,7 @@ const std::vector<const char *> val_layers = {
 };
 
 const std::vector<const char *> dev_exts = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    // VK_KHR_SWAPCHAIN_EXTENSION_NAME,
     VK_EXT_CONSERVATIVE_RASTERIZATION_EXTENSION_NAME
     // VK_EXT_PIPELINE_ROBUSTNESS_EXTENSION_NAME // not available
     // VK_EXT_HOST_QUERY_RESET_EXTENSION_NAME // not required anymore

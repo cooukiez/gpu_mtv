@@ -66,6 +66,19 @@ void App::create_cmd_bufs() {
         throw std::runtime_error("failed to allocate command buffers.");
 }
 
+void App::create_sync() {
+    fens.resize(MAX_FRAMES_IN_FLIGHT);
+
+    VkFenceCreateInfo fen_info{};
+    fen_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fen_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        if (vkCreateFence(dev, &fen_info, nullptr, &fens[i]) != VK_SUCCESS)
+            throw std::runtime_error("failed to create synchronization objects.");
+    }
+}
+
 void App::render() {
     vkWaitForFences(dev, 1, &fens[cur_frame], VK_TRUE, UINT64_MAX);
 
@@ -74,33 +87,21 @@ void App::render() {
     vkResetFences(dev, 1, &fens[cur_frame]);
 
     vkResetCommandBuffer(cmd_bufs[cur_frame], /*VkCommandBufferResetFlagBits*/ 0);
-    record_cmd_buf(cmd_bufs[cur_frame], img_index);
+    record_cmd_buf(cmd_bufs[cur_frame]);
 
     VkSubmitInfo submit{};
     submit.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-
-
     submit.commandBufferCount = 1;
     submit.pCommandBuffers = &cmd_bufs[cur_frame];
 
     if (vkQueueSubmit(q_graph, 1, &submit, fens[cur_frame]) != VK_SUCCESS)
         throw std::runtime_error("failed to submit render command buffer.");
 
-    VkPresentInfoKHR present{};
-    present.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-
-    present.waitSemaphoreCount = 1;
-    present.pWaitSemaphores = signal_semps;
-
-    const VkSwapchainKHR swaps[] = {swap};
-    present.swapchainCount = 1;
-    present.pSwapchains = swaps;
-
-    present.pImageIndices = &img_index;
-
-    vkQueuePresentKHR(q_pres, &present);
-
-    fetch_queries(img_index);
-
     cur_frame = (cur_frame + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void App::clean_up_sync() const {
+    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
+        vkDestroyFence(dev, fens[i], nullptr);
+    }
 }
