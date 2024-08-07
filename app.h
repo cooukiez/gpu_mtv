@@ -121,91 +121,29 @@ struct VCW_OrthographicChunkModule {
     }
 
     void update_proj() {
-        const glm::mat4 ortho_mat_v1 = glm::ortho(0.f, coord_diff.x * axis_scalar.x,
-                                                  0.f, coord_diff.y * axis_scalar.y,
-                                                  0.f, coord_diff.z * axis_scalar.z);
-
-        float max_max = max_component(max_coord);
-        float min_max = max_component(min_coord);
-
-        const glm::mat4 ortho_mat_v2 = glm::ortho(min_coord.x * (min_max / min_coord.x),
-                                                  max_coord.x * (max_max / max_coord.x),
-                                                  min_coord.y * (min_max / min_coord.y),
-                                                  max_coord.y * (max_max / max_coord.y),
-                                                  min_coord.z * (min_max / min_coord.z),
-                                                  max_coord.z * (max_max / max_coord.z));
-
-        float coord_diff_max = max_component(coord_diff);
-
-        float scale_z = coord_diff.z / coord_diff_max;
-        float scale_y = coord_diff.y / coord_diff_max;
-        float scale_x = coord_diff.x / coord_diff_max;
-
-        std::cout << "scale_x: " << scale_x << std::endl;
-        std::cout << "scale_y: " << scale_y << std::endl;
-        std::cout << "scale_z: " << scale_z << std::endl;
-
-        const glm::mat4 ortho_mat_v3 = glm::ortho(min_coord.x, max_coord.x,
-                                                  min_coord.y, max_coord.y,
-                                                  0.f, coord_diff.z * .75f);
-
-        glm::mat4 trans_mat_v2 = glm::translate(glm::mat4(1.f), -glm::vec3(0.f, 0.f, min_coord.z + max_coord.z));
-
-        glm::mat4 ortho_mat_v4 = glm::ortho(0.0f, 255.0f, 0.0f, 255.0f, 0.0f, 255.0f);
-
-        glm::mat4 ortho_mat_v5 = glm::ortho(0.f, coord_diff.x, 0.f, coord_diff.y, 0.f, coord_diff.z);
-
-        glm::mat4 ortho_mat_v6 = glm::ortho(min_coord.x, max_coord.x, min_coord.y, max_coord.y, min_coord.z,
-                                            max_coord.z);
-
-        float left = min_coord.x;
-        float right = min_coord.x + coord_diff.x;
-        float bottom = min_coord.y;
-        float top = min_coord.y + coord_diff.y;
-        float near = min_coord.z;
-        float far = min_coord.z + coord_diff.z;
-
-        glm::mat4 ortho_mat_v7 = glm::ortho(left, right, bottom, top, near, far);
-
-        float scaleFactor = 256.0f / coord_diff_max;
-
-        glm::mat4 scaleMatrix = glm::scale(glm::mat4(1.0f), glm::vec3(scaleFactor));
-        glm::mat4 trans_mat_v3 = glm::translate(glm::mat4(1.0f), -min_coord);
-
         glm::vec3 center = (min_coord + max_coord) / 2.0f;
+        float max_dimension = glm::max(coord_diff.x, glm::max(coord_diff.y, coord_diff.z));
 
-        std::cout << "coord_diff_max: " << coord_diff_max << std::endl;
+        std::cout << "center: " << center << std::endl;
 
-        glm::mat4 ortho_mat_v8 = glm::ortho(
-                center.x - coord_diff_max / 2.0f,
-                center.x + coord_diff_max / 2.0f,
-                center.y - coord_diff_max / 2.0f,
-                center.y + coord_diff_max / 2.0f,
-                center.z - coord_diff_max,
-                center.z + coord_diff_max / 2.0f
-        );
+        float scale_factor = 256.0f / max_dimension;
+        glm::vec3 scale = glm::vec3(scale_factor);
+        scale.z *= 2.f;
 
-        float scale_x_2 = 256.0f / coord_diff.x;
-        float scale_y_2 = 256.0f / coord_diff.y;
-        float scale_z_2 = 256.0f / coord_diff.z;
-        float scale = glm::min(scale_x_2, glm::min(scale_y_2, scale_z_2));
-
+        // Translate to center the model at the origin
         glm::mat4 model_matrix = glm::mat4(1.0f);
-        model_matrix = glm::translate(model_matrix, -center); // Translate to origin
-        model_matrix = glm::scale(model_matrix, glm::vec3(scale)); // Apply uniform scaling
-        model_matrix = glm::translate(model_matrix, glm::vec3(128.0f, 128.0f, 128.0f)); // Center in voxel grid
+        model_matrix = glm::translate(model_matrix, -center * scale);
+        model_matrix = glm::scale(model_matrix, scale);
 
-        glm::mat4 ortho_mat_v9 = glm::ortho(
-                0.0f, 256.0f, // Left, Right
-                0.0f, 256.0f, // Bottom, Top
-                0.0f, 256.0f  // Near, Far
+        // Create the orthographic projection matrix for the voxel grid
+        glm::mat4 ortho_projection = glm::ortho(
+                -128.0f, 128.0f, // Left, Right
+                -128.0f, 128.0f, // Bottom, Top
+                0.f, 256.0f  // Near, Far
         );
 
-        glm::mat4 ortho_mat_v10 = glm::ortho(min_coord.x * (1.f / scale_x), max_coord.x * (1.f / scale_x),
-                                             min_coord.y * (1.f / scale_y), max_coord.y * (1.f / scale_y),
-                                             -scale_z * min_coord.z, -1.f * max_coord.z);
-
-        proj = ortho_mat_v10; // * trans_mat_v2;
+        // Combine the transformations
+        proj = ortho_projection * model_matrix;
     }
 };
 
