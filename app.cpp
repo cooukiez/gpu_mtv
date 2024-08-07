@@ -142,6 +142,8 @@ void App::load_model() {
 }
 
 void App::init_app() {
+    render_extent = VkExtent2D{params.chunk_res, params.chunk_res};
+
     //
     // vulkan core initialization
     //
@@ -159,8 +161,10 @@ void App::init_app() {
 
     create_cmd_pool();
 
-    create_textures();
-    create_textures_sampler();
+    if (params.load_textures) {
+        create_textures();
+        create_textures_sampler();
+    }
 
     create_vert_buf();
     create_index_buf();
@@ -213,6 +217,7 @@ void App::create_index_buf() {
     clean_up_buf(staging_buf);
 }
 
+// TODO: fix texture loading in general
 // TODO: implement texture set (every texture single time)
 void App::create_textures() {
     std::cout << "material count: " << materials.size() << std::endl;
@@ -221,11 +226,6 @@ void App::create_textures() {
             continue;
 
         std::cout << "loading texture: " << mat.diffuse_texname << std::endl;
-
-        /*
-        if (textures.find(mat.diffuse_texname) != textures.end())
-            continue;
-        */
 
         int tex_width, tex_height, tex_channels;
         stbi_uc *pixels = stbi_load((TEXTURE_PATH + mat.diffuse_texname).c_str(), &tex_width, &tex_height,
@@ -261,9 +261,6 @@ void App::create_textures() {
 
         clean_up_buf(staging_buf);
 
-        /*
-        textures[mat.diffuse_texname] = tex_img;
-        */
         textures.push_back(tex_img);
     }
     std::cout << "loaded textures: " << textures.size() << std::endl;
@@ -279,7 +276,7 @@ void App::create_unif_bufs() {
 
     ubo.min_vert = glm::vec4(min_vert_coord, 1.0f);
     ubo.max_vert = glm::vec4(max_vert_coord, 1.0f);
-    ubo.chunk_res = glm::vec4(glm::vec3(CHUNK_SIDE_LENGTH), 0);
+    ubo.chunk_res = glm::vec4(glm::vec3(params.chunk_res), 0);
     ubo.scalar = model_scale;
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
@@ -294,7 +291,7 @@ void App::create_unif_bufs() {
 }
 
 void App::create_render_target() {
-    VkExtent3D extent = {CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH, CHUNK_SIDE_LENGTH};
+    VkExtent3D extent = {params.chunk_res, params.chunk_res, params.chunk_res};
     render_target = create_img(extent, VK_FORMAT_R8_UINT,
                                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
                                VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -302,7 +299,7 @@ void App::create_render_target() {
 
     create_img_view(&render_target, VK_IMAGE_VIEW_TYPE_3D, DEFAULT_SUBRESOURCE_RANGE);
 
-    VkDeviceSize size = CHUNK_SIZE * sizeof(uint8_t);
+    VkDeviceSize size = params.chunk_size * sizeof(uint8_t);
     transfer_buf = create_buf(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                               VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 }
@@ -320,6 +317,8 @@ void App::create_desc_pool_layout() {
     bindings.push_back(uniform_layout_binding);
     last_binding++;
 
+    // sampler layout binding must always be created
+    // otherwise shader recompilation would be required
     VkDescriptorSetLayoutBinding sampler_layout_binding{};
     sampler_layout_binding.binding = last_binding;
     sampler_layout_binding.descriptorCount = 1;
@@ -329,6 +328,8 @@ void App::create_desc_pool_layout() {
     bindings.push_back(sampler_layout_binding);
     last_binding++;
 
+    // texture layout binding must always be created
+    // otherwise shader recompilation would be required
     VkDescriptorSetLayoutBinding textures_layout_binding{};
     textures_layout_binding.binding = last_binding;
     if (textures.size() > DESCRIPTOR_TEXTURE_COUNT)
@@ -413,10 +414,10 @@ void App::create_pipe() {
     raster_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
     raster_info.depthClampEnable = VK_FALSE;
     raster_info.rasterizerDiscardEnable = VK_FALSE;
-    raster_info.polygonMode = POLYGON_MODE;
+    raster_info.polygonMode = VK_POLYGON_MODE_FILL;
     raster_info.lineWidth = 1.0f;
-    raster_info.cullMode = CULL_MODE;
-    raster_info.frontFace = FRONT_FACE;
+    raster_info.cullMode = VK_CULL_MODE_NONE;
+    raster_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
     raster_info.depthBiasEnable = VK_FALSE;
 
     VkPipelineMultisampleStateCreateInfo multisample_info{};
@@ -452,7 +453,7 @@ void App::create_pipe() {
     dynamic_state_info.pDynamicStates = dynamic_states.data();
 
     VkPushConstantRange push_const_range{};
-    push_const_range.stageFlags = PUSH_CONSTANTS_STAGE;
+    push_const_range.stageFlags = VK_SHADER_STAGE_ALL_GRAPHICS;
     push_const_range.offset = 0;
     push_const_range.size = sizeof(VCW_PushConstants);
 
@@ -492,29 +493,24 @@ void App::create_pipe() {
 
 void App::write_desc_pool() const {
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        uint32_t last_binding = 0;
+        write_buf_desc_binding(unif_bufs[i], static_cast<uint32_t>(i), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
 
-        write_buf_desc_binding(unif_bufs[i], static_cast<uint32_t>(i), last_binding, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-        last_binding++;
+        if (params.load_textures) {
+            write_sampler_desc_binding(sampler, static_cast<uint32_t>(i), 1);
 
-        write_sampler_desc_binding(sampler, static_cast<uint32_t>(i), last_binding);
-        last_binding++;
-
-        if (!textures.empty()) {
-            write_img_desc_array(textures, static_cast<uint32_t>(i), last_binding, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+            if (!textures.empty()) {
+                write_img_desc_array(textures, static_cast<uint32_t>(i), 2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
+            }
         }
-        last_binding++;
 
-        write_img_desc_binding(render_target, static_cast<uint32_t>(i), last_binding, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        write_img_desc_binding(render_target, static_cast<uint32_t>(i), 3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                VK_IMAGE_LAYOUT_GENERAL);
-        last_binding++;
     }
 }
 
 void App::update_bufs(const uint32_t index_inflight_frame) {
     push_const.view_proj = chunk_module.proj;
     push_const.res = {render_extent.width, render_extent.height};
-    push_const.time = stats.frame_count;
 }
 
 void App::record_cmd_buf(VkCommandBuffer cmd_buf) {
@@ -584,21 +580,19 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf) {
 
 void App::comp_vox_grid() {
     chunk_module.init(min_vert_coord, max_vert_coord);
-    chunk_module.axis_scalar = {1.f, 1.f, .5f};
-    chunk_module.update_proj();
 
-    std::vector<uint8_t> cached_output(CHUNK_SIZE);
+    std::vector<uint8_t> cached_output(params.chunk_size);
     std::cout << "render extent: " << render_extent.width << "x" << render_extent.height << std::endl;
 
     BvoxHeader header{};
-    header.chunk_res = CHUNK_SIDE_LENGTH;
-    header.chunk_size = CHUNK_SIZE;
+    header.chunk_res = params.chunk_res;
+    header.chunk_size = params.chunk_size;
 
     write_empty_bvox("output.bvox", header);
 
     glfwPollEvents();
     ubo.sector_start = glm::vec4(glm::vec3(0.f), 0.f);
-    ubo.sector_end = glm::vec4(glm::vec3(CHUNK_SIDE_LENGTH), 0.f);
+    ubo.sector_end = glm::vec4(glm::vec3(params.chunk_res), 0.f);
 
     for (const auto &unif_buf: unif_bufs)
         memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
@@ -608,15 +602,15 @@ void App::comp_vox_grid() {
     render();
     auto end_time = std::chrono::high_resolution_clock::now();
     auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    stats.frame_time = static_cast<double>(render_duration.count()) / 1000.0;
-    std::cout << "render time: " << stats.frame_time << "ms" << std::endl;
+    double frame_time = static_cast<double>(render_duration.count()) / 1000.0;
+    std::cout << "render time: " << frame_time << "ms" << std::endl;
 
 
     start_time = std::chrono::high_resolution_clock::now();
     cp_data_from_buf(&transfer_buf, cached_output.data());
 
     uint32_t vox_count = 0;
-    for (int l = 0; l < CHUNK_SIZE; l++) {
+    for (int l = 0; l < params.chunk_size; l++) {
         if (cached_output[l] > 0) {
             // std::cout << cached_output[l] << " at " << l << std::endl;
             vox_count++;
@@ -645,12 +639,14 @@ void App::clean_up() {
     for (const auto buf: unif_bufs)
         clean_up_buf(buf);
 
-    for (const auto texture: textures)
-        clean_up_img(texture);
+    if (params.load_textures) {
+        for (const auto texture: textures)
+            clean_up_img(texture);
+
+        vkDestroySampler(dev, sampler, nullptr);
+    }
 
     clean_up_buf(transfer_buf);
-
-    vkDestroySampler(dev, sampler, nullptr);
 
     clean_up_img(render_target);
 

@@ -104,66 +104,56 @@ struct VCW_Image {
 
 struct VCW_OrthographicChunkModule {
     glm::mat4 proj;
-    glm::mat4 trans_mat;
 
-    glm::vec3 min_coord;
-    glm::vec3 max_coord;
-    glm::vec3 coord_diff;
-
-    glm::vec3 axis_scalar = {1.f, 1.f, 1.f};
-
-    void init(const glm::vec3 loc_min_coord, const glm::vec3 loc_max_coord) {
-        min_coord = loc_min_coord;
-        max_coord = loc_max_coord;
-        coord_diff = loc_max_coord - loc_min_coord;
-
-        trans_mat = glm::translate(glm::mat4(1.f), -glm::vec3(min_coord.x, min_coord.y, 0.f));
-    }
-
-    void update_proj() {
+    void init(const glm::vec3 min_coord, const glm::vec3 max_coord) {
+        glm::vec3 dim = max_coord - min_coord;
         glm::vec3 center = (min_coord + max_coord) / 2.0f;
-        float max_dimension = glm::max(coord_diff.x, glm::max(coord_diff.y, coord_diff.z));
 
-        std::cout << "center: " << center << std::endl;
+        float max_dim = glm::max(dim.x, glm::max(dim.y, dim.z));
 
-        float scale_factor = 256.0f / max_dimension;
+        // scaling
+        float scale_factor = 256.0f / max_dim;
         glm::vec3 scale = glm::vec3(scale_factor);
         scale.z *= 2.f;
 
-        // Translate to center the model at the origin
+        // translation - centering & scaling
         glm::mat4 model_matrix = glm::mat4(1.0f);
         model_matrix = glm::translate(model_matrix, -center * scale);
         model_matrix = glm::scale(model_matrix, scale);
 
-        // Create the orthographic projection matrix for the voxel grid
-        glm::mat4 ortho_projection = glm::ortho(
-                -128.0f, 128.0f, // Left, Right
-                -128.0f, 128.0f, // Bottom, Top
-                0.f, 256.0f  // Near, Far
+        // create orthographic projection
+        glm::mat4 ortho_proj = glm::ortho(
+                -128.0f, 128.0f, // left, right
+                -128.0f, 128.0f, // bottom, top
+                0.f, 256.0f  // near, far
         );
 
-        // Combine the transformations
-        proj = ortho_projection * model_matrix;
+        // combine orthographic and model matrix
+        proj = ortho_proj * model_matrix;
     }
 };
 
-struct VCW_RenderStats {
-    double frame_time;
-    double gpu_frame_time;
-    uint32_t frame_count;
+struct VoxelizeParams {
+    uint32_t chunk_res;
+    uint32_t chunk_size;
+
+    bool load_textures;
 };
 
 class App {
 public:
+    App(VoxelizeParams params) {
+        params = params;
+    }
+
     void run() {
         load_model();
-
-        render_extent = VkExtent2D{256, 256};
-
         init_app();
         comp_vox_grid();
         clean_up();
     }
+
+    VoxelizeParams params;
 
     VkInstance inst;
     VkDebugUtilsMessengerEXT debug_msg;
@@ -226,8 +216,6 @@ public:
     std::vector<VkFence> fens;
 
     uint32_t cur_frame = 0;
-    VCW_RenderStats stats;
-    VCW_RenderStats readable_stats;
 
     VCW_OrthographicChunkModule chunk_module;
 
