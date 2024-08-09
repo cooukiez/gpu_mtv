@@ -17,11 +17,27 @@ void App::create_rendp() {
         throw std::runtime_error("failed to create render pass.");
 }
 
-VkShaderModule App::create_shader_mod(const std::vector<char> &code) const {
+std::vector<uint32_t> App::compile_shader(const std::string& source, shaderc_shader_kind kind, const char* entry_point) {
+    shaderc::Compiler compiler;
+    shaderc::CompileOptions options;
+    options.SetTargetEnvironment(shaderc_target_env_vulkan, shaderc_env_version_vulkan_1_3);
+    options.SetTargetSpirv(shaderc_spirv_version_1_3);
+
+    shaderc::SpvCompilationResult result = compiler.CompileGlslToSpv(source, kind, entry_point, options);
+
+    if (result.GetCompilationStatus() != shaderc_compilation_status_success) {
+        std::cerr << "shader compilation error: " << result.GetErrorMessage() << std::endl;
+        throw std::runtime_error("shader compilation failed.");
+    }
+
+    return {result.cbegin(), result.cend()};
+}
+
+VkShaderModule App::create_shader_mod(const std::vector<uint32_t> &code) const {
     VkShaderModuleCreateInfo mod_info{};
     mod_info.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-    mod_info.codeSize = code.size();
-    mod_info.pCode = reinterpret_cast<const uint32_t *>(code.data());
+    mod_info.codeSize = sizeof(uint32_t) * code.size();
+    mod_info.pCode = code.data();
 
     VkShaderModule mod;
     if (vkCreateShaderModule(dev, &mod_info, nullptr, &mod) != VK_SUCCESS)

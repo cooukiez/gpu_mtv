@@ -4,7 +4,12 @@
 #include "app.h"
 
 int main() {
-    App app{};
+    VoxelizeParams params{};
+    params.chunk_res = 256;
+    params.chunk_size = static_cast<uint32_t>(pow(256, 3));
+    params.load_textures = false;
+
+    App app(params);
 
     try {
         app.run();

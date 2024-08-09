@@ -10,14 +10,7 @@ layout (triangles) in;
 layout (triangle_strip, max_vertices = 3) out;
 
 layout (set = 0, binding = 0) uniform UBO {
-    vec4 min_vert;
-    vec4 max_vert;
     vec4 chunk_res;
-
-    vec4 sector_start;
-    vec4 sector_end;
-
-    uint use_textures;
 } ubo;
 
 layout (location = 0) in vec4 vs_pos[];

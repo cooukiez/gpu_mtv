@@ -67,13 +67,7 @@ struct VCW_PushConstants {
 };
 
 struct VCW_Uniform {
-    glm::vec4 min_vert;
-    glm::vec4 max_vert;
     glm::vec4 chunk_res;
-    glm::vec4 sector_start;
-    glm::vec4 sector_end;
-    float scalar;
-    uint32_t use_textures;
 };
 
 struct VCW_Buffer {
@@ -142,8 +136,9 @@ struct VoxelizeParams {
 
 class App {
 public:
-    App(VoxelizeParams params) {
-        params = params;
+    VoxelizeParams params;
+
+    App(VoxelizeParams params) : params(params) {
     }
 
     void run() {
@@ -152,8 +147,6 @@ public:
         comp_vox_grid();
         clean_up();
     }
-
-    VoxelizeParams params;
 
     VkInstance inst;
     VkDebugUtilsMessengerEXT debug_msg;
@@ -195,7 +188,7 @@ public:
     VCW_Buffer vert_buf;
     glm::vec3 min_vert_coord;
     glm::vec3 max_vert_coord;
-    glm::vec3 coord_diff;
+    glm::vec3 dim;
     float model_scale;
 
     std::vector<uint32_t> indices;
@@ -368,7 +361,9 @@ public:
     //
     void create_rendp();
 
-    VkShaderModule create_shader_mod(const std::vector<char> &code) const;
+    std::vector<uint32_t> compile_shader(const std::string& source, shaderc_shader_kind kind, const char* entry_point);
+
+    VkShaderModule create_shader_mod(const std::vector<uint32_t> &code) const;
 
     void create_frame_buf();
 

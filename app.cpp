@@ -12,7 +12,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 
 
-#define MODEL_INDEX 7
+#define MODEL_INDEX 3
 
 #if MODEL_INDEX == 0
 #define MODEL_PATH "models/armadillo/armadillo.obj"
@@ -65,10 +65,12 @@
 #endif
 
 void App::load_model() {
+    std::cout << std::endl << "--- Model loading ---" << std::endl;
     std::string warn, err;
     if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH, TEXTURE_PATH))
         throw std::runtime_error(err);
-    std::cout << warn << std::endl;
+    if (!warn.empty())
+        std::cout << warn << std::endl;
 
     std::unordered_map<Vertex, uint32_t> unique_vertices{};
 
@@ -134,11 +136,12 @@ void App::load_model() {
         }
     }
 
-    coord_diff = max_vert_coord - min_vert_coord;
+    dim = max_vert_coord - min_vert_coord;
 
     std::cout << "min vertex coord: " << min_vert_coord << std::endl;
     std::cout << "max vertex coord: " << max_vert_coord << std::endl;
-    std::cout << "coord diff: " << coord_diff << std::endl;
+    std::cout << "dimensions: " << dim << std::endl;
+    std::cout << "found " << vertices.size() << " vertices.";
 }
 
 void App::init_app() {
@@ -220,7 +223,8 @@ void App::create_index_buf() {
 // TODO: fix texture loading in general
 // TODO: implement texture set (every texture single time)
 void App::create_textures() {
-    std::cout << "material count: " << materials.size() << std::endl;
+    std::cout << std::endl << "--- Texture loading ---" << std::endl;
+    std::cout << "materials found: " << materials.size() << std::endl;
     for (const auto &mat: materials) {
         if (mat.diffuse_texname.empty())
             continue;
@@ -271,13 +275,7 @@ void App::create_textures_sampler() {
 }
 
 void App::create_unif_bufs() {
-    if (!textures.empty())
-        ubo.use_textures = true;
-
-    ubo.min_vert = glm::vec4(min_vert_coord, 1.0f);
-    ubo.max_vert = glm::vec4(max_vert_coord, 1.0f);
-    ubo.chunk_res = glm::vec4(glm::vec3(params.chunk_res), 0);
-    ubo.scalar = model_scale;
+    ubo.chunk_res = glm::vec4(glm::vec3(static_cast<float>(params.chunk_res)), 0);
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
     unif_bufs.resize(MAX_FRAMES_IN_FLIGHT);
@@ -361,13 +359,21 @@ void App::create_desc_pool_layout() {
 }
 
 void App::create_pipe() {
-    auto vert_code = read_file<char>("vert.spv");
-    auto frag_code = read_file<char>("frag.spv");
-    auto geom_code = read_file<char>("geom.spv");
+    std::cout << std::endl << "--- Pipeline creation ---" << std::endl;
+    std::string vert_code = read_file_string("shaders/shader.vert");
+    std::string geom_code = read_file_string("shaders/shader.geom");
+    std::string frag_code = read_file_string("shaders/shader.frag");
 
-    VkShaderModule vert_module = create_shader_mod(vert_code);
-    VkShaderModule frag_module = create_shader_mod(frag_code);
-    VkShaderModule geom_module = create_shader_mod(geom_code);
+    std::cout << "compiling vertex shader." << std::endl;
+    std::vector<uint32_t> vert_bin = compile_shader(vert_code, shaderc_glsl_vertex_shader, "main");
+    std::cout << "compiling geometry shader." << std::endl;
+    std::vector<uint32_t> geom_bin = compile_shader(geom_code, shaderc_glsl_geometry_shader, "main");
+    std::cout << "compiling fragment shader." << std::endl;
+    std::vector<uint32_t> frag_bin = compile_shader(frag_code, shaderc_glsl_fragment_shader, "main");
+
+    VkShaderModule vert_module = create_shader_mod(vert_bin);
+    VkShaderModule geom_module = create_shader_mod(geom_bin);
+    VkShaderModule frag_module = create_shader_mod(frag_bin);
 
     VkPipelineShaderStageCreateInfo vert_stage_info{};
     vert_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -375,19 +381,19 @@ void App::create_pipe() {
     vert_stage_info.module = vert_module;
     vert_stage_info.pName = "main";
 
-    VkPipelineShaderStageCreateInfo frag_stage_info{};
-    frag_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    frag_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    frag_stage_info.module = frag_module;
-    frag_stage_info.pName = "main";
-
     VkPipelineShaderStageCreateInfo geom_stage_info{};
     geom_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     geom_stage_info.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
     geom_stage_info.module = geom_module;
     geom_stage_info.pName = "main";
 
-    std::array stages = {vert_stage_info, frag_stage_info, geom_stage_info};
+    VkPipelineShaderStageCreateInfo frag_stage_info{};
+    frag_stage_info.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    frag_stage_info.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    frag_stage_info.module = frag_module;
+    frag_stage_info.pName = "main";
+
+    std::array stages = {vert_stage_info, geom_stage_info, frag_stage_info};
 
     VkPipelineVertexInputStateCreateInfo vert_input_info{};
     vert_input_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -579,6 +585,7 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf) {
 }
 
 void App::comp_vox_grid() {
+    std::cout << std::endl << "--- Voxelization ---" << std::endl;
     chunk_module.init(min_vert_coord, max_vert_coord);
 
     std::vector<uint8_t> cached_output(params.chunk_size);
@@ -590,46 +597,40 @@ void App::comp_vox_grid() {
 
     write_empty_bvox("output.bvox", header);
 
-    glfwPollEvents();
-    ubo.sector_start = glm::vec4(glm::vec3(0.f), 0.f);
-    ubo.sector_end = glm::vec4(glm::vec3(params.chunk_res), 0.f);
-
     for (const auto &unif_buf: unif_bufs)
         memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
-
 
     auto start_time = std::chrono::high_resolution_clock::now();
     render();
     auto end_time = std::chrono::high_resolution_clock::now();
-    auto render_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
-    double frame_time = static_cast<double>(render_duration.count()) / 1000.0;
-    std::cout << "render time: " << frame_time << "ms" << std::endl;
-
+    auto voxelization_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
+    double voxelization_time = static_cast<double>(voxelization_duration.count()) / 1000.0;
 
     start_time = std::chrono::high_resolution_clock::now();
     cp_data_from_buf(&transfer_buf, cached_output.data());
 
     uint32_t vox_count = 0;
-    for (int l = 0; l < params.chunk_size; l++) {
+    for (uint32_t l = 0; l < params.chunk_size; l++) {
         if (cached_output[l] > 0) {
-            // std::cout << cached_output[l] << " at " << l << std::endl;
             vox_count++;
         }
     }
-    std::cout << "voxel count: " << vox_count << std::endl;
 
     end_time = std::chrono::high_resolution_clock::now();
     auto copy_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    std::cout << "copy time: " << copy_duration.count() << "ms" << std::endl;
-
 
     start_time = std::chrono::high_resolution_clock::now();
     append_to_bvox("output.bvox", cached_output);
     end_time = std::chrono::high_resolution_clock::now();
     auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-    std::cout << "write time: " << write_duration.count() << "ms" << std::endl;
 
     vkDeviceWaitIdle(dev);
+
+    std::cout << std::endl << "--- Results ---" << std::endl;
+    std::cout << "voxelization time: " << voxelization_time << "ms" << std::endl;
+    std::cout << "copy time: " << copy_duration.count() << "ms" << std::endl;
+    std::cout << "write time: " << write_duration.count() << "ms" << std::endl;
+    std::cout << "voxel count: " << vox_count << std::endl;
 }
 
 void App::clean_up() {

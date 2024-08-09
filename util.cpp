@@ -26,6 +26,11 @@ std::vector<T> read_file(const std::string &filename) {
     return buf;
 }
 
+std::string read_file_string(const std::string &filename) {
+    std::vector<char> data = read_file<char>(filename);
+    return std::string(data.begin(), data.end());
+}
+
 void write_file(const std::string &filename, const void *data, const std::streamsize size) {
     std::ofstream file(filename, std::ios::out | std::ios::binary);
 

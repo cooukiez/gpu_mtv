@@ -24,14 +24,15 @@ find_package(glm REQUIRED)
 find_package(Vulkan REQUIRED)
 find_package(Stb REQUIRED)
 find_package(tinyobjloader REQUIRED)
+find_package(unofficial-shaderc REQUIRED)
 
 target_link_libraries(main Vulkan::Vulkan)
 target_link_libraries(main glfw)
 target_link_libraries(main glm::glm)
 target_link_libraries(main tinyobjloader::tinyobjloader)
+target_link_libraries(main unofficial::shaderc::shaderc)
 
 target_include_directories(main PRIVATE ${Stb_INCLUDE_DIR})
-
 target_include_directories(main PRIVATE ${VSS_DIR}/include)
 
 if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
@@ -42,16 +43,19 @@ elseif (CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /O2")
 endif()
 
-add_custom_target(vert.spv
-        COMMAND glslangValidator --quiet -V ${CMAKE_SOURCE_DIR}/shader.vert -o ${CMAKE_BINARY_DIR}/vert.spv)
+set(SHADERS
+        ${CMAKE_SOURCE_DIR}/shader.vert
+        ${CMAKE_SOURCE_DIR}/shader.geom
+        ${CMAKE_SOURCE_DIR}/shader.frag
+)
 
-add_custom_target(geom.spv
-        COMMAND glslangValidator --quiet -V ${CMAKE_SOURCE_DIR}/shader.geom -o ${CMAKE_BINARY_DIR}/geom.spv)
+set(SHADERS_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/shaders)
 
-add_custom_target(frag.spv
-        COMMAND glslangValidator --quiet -V ${CMAKE_SOURCE_DIR}/shader.frag -o ${CMAKE_BINARY_DIR}/frag.spv)
+add_custom_command(
+        TARGET main POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_OUTPUT_DIRECTORY}
+        COMMAND ${CMAKE_COMMAND} -E copy ${SHADERS} ${SHADERS_OUTPUT_DIRECTORY}
+        COMMENT "Copying shaders to output directory."
+)
 
-add_dependencies(main vert.spv geom.spv frag.spv)
-
-file(COPY ${CMAKE_SOURCE_DIR}/textures DESTINATION ${CMAKE_BINARY_DIR})
 file(COPY ${CMAKE_SOURCE_DIR}/models DESTINATION ${CMAKE_BINARY_DIR})

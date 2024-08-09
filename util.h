@@ -10,6 +10,8 @@
 template<typename T>
 std::vector<T> read_file(const std::string &filename);
 
+std::string read_file_string(const std::string &filename);
+
 void write_file(const std::string &filename, const void *data, std::streamsize size);
 
 void append_to_file(const std::string &filename, const void *data, std::streamsize size);

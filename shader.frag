@@ -1,18 +1,9 @@
 #version 450
-#extension GL_EXT_debug_printf: enable
 
 // from https://github.com/pumexx/pumex/tree/master/examples/pumexvoxelizer
 
 layout (set = 0, binding = 0) uniform UBO {
-    vec4 min_vert;
-    vec4 max_vert;
     vec4 chunk_res;
-
-    vec4 sector_start;
-    vec4 sector_end;
-
-    float scalar;
-    uint use_textures;
 } ubo;
 
 layout (set = 0, binding = 1) uniform sampler samp;
@@ -35,7 +26,7 @@ void main() {
     //if (any(lessThan(vec3(img_coord), ubo.sector_start.xyz)) || any(lessThan(ubo.sector_end.xyz, vec3(img_coord)))) discard;
     //img_coord -= ivec3(ubo.sector_start.xyz);
 
-    vec4 tex_col = ubo.use_textures != 0 ? texture(sampler2D(textures[gs_mat_id], samp), gs_uv) : vec4(gs_color, 1);
+    // vec4 tex_col = ubo.use_textures != 0 ? texture(sampler2D(textures[gs_mat_id], samp), gs_uv) : vec4(gs_color, 1);
 
     imageStore(render_target, img_coord, uvec4(1));
 }
