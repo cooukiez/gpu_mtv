@@ -1,6 +1,3 @@
 [submodule "vss"]
 	path = vss
 	url = https://github.com/cooukiez/vss
-[submodule "models"]
-	path = models
-	url = https://github.com/cooukiez/vox_scenes.git
