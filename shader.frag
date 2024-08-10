@@ -6,9 +6,7 @@ layout (set = 0, binding = 0) uniform UBO {
     vec4 chunk_res;
 } ubo;
 
-layout (set = 0, binding = 1) uniform sampler samp;
-layout (set = 0, binding = 2) uniform texture2D textures[32];
-layout (set = 0, binding = 3, r8ui) uniform uimage3D render_target;
+layout (set = 0, binding = 1, r8ui) uniform uimage3D render_target;
 
 layout (location = 0) in vec3 gs_pos;
 layout (location = 1) in vec3 gs_normal;
@@ -23,10 +21,6 @@ void main() {
 
     vec3 address = gs_pos * vec3(0.5) + vec3(0.5);
     ivec3 img_coord = ivec3(ubo.chunk_res.xyz * address);
-    //if (any(lessThan(vec3(img_coord), ubo.sector_start.xyz)) || any(lessThan(ubo.sector_end.xyz, vec3(img_coord)))) discard;
-    //img_coord -= ivec3(ubo.sector_start.xyz);
-
-    // vec4 tex_col = ubo.use_textures != 0 ? texture(sampler2D(textures[gs_mat_id], samp), gs_uv) : vec4(gs_color, 1);
 
     imageStore(render_target, img_coord, uvec4(1));
 }

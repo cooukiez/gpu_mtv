@@ -30,5 +30,7 @@
 #include <sstream>
 #include <functional>
 #include <cmath>
+#include <string>
+#include <filesystem>
 
 #include "vss.h"

@@ -52,10 +52,15 @@ set(SHADERS
 set(SHADERS_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/shaders)
 
 add_custom_command(
-        TARGET main POST_BUILD
+        OUTPUT ${SHADERS_OUTPUT_DIRECTORY}
         COMMAND ${CMAKE_COMMAND} -E make_directory ${SHADERS_OUTPUT_DIRECTORY}
         COMMAND ${CMAKE_COMMAND} -E copy ${SHADERS} ${SHADERS_OUTPUT_DIRECTORY}
         COMMENT "Copying shaders to output directory."
+        DEPENDS ${SHADERS}
 )
+
+add_custom_target(copy_shaders ALL DEPENDS ${SHADERS_OUTPUT_DIRECTORY})
+add_dependencies(main copy_shaders)
+
 
 file(COPY ${CMAKE_SOURCE_DIR}/models DESTINATION ${CMAKE_BINARY_DIR})

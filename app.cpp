@@ -141,7 +141,7 @@ void App::load_model() {
     std::cout << "min vertex coord: " << min_vert_coord << std::endl;
     std::cout << "max vertex coord: " << max_vert_coord << std::endl;
     std::cout << "dimensions: " << dim << std::endl;
-    std::cout << "found " << vertices.size() << " vertices.";
+    std::cout << "found " << vertices.size() << " vertices." << std::endl;
 }
 
 void App::init_app() {
@@ -164,15 +164,10 @@ void App::init_app() {
 
     create_cmd_pool();
 
-    if (params.load_textures) {
-        create_textures();
-        create_textures_sampler();
-    }
-
     create_vert_buf();
     create_index_buf();
 
-    create_unif_bufs();
+    create_unif_buf();
 
     create_render_target();
 
@@ -220,72 +215,14 @@ void App::create_index_buf() {
     clean_up_buf(staging_buf);
 }
 
-// TODO: fix texture loading in general
-// TODO: implement texture set (every texture single time)
-void App::create_textures() {
-    std::cout << std::endl << "--- Texture loading ---" << std::endl;
-    std::cout << "materials found: " << materials.size() << std::endl;
-    for (const auto &mat: materials) {
-        if (mat.diffuse_texname.empty())
-            continue;
-
-        std::cout << "loading texture: " << mat.diffuse_texname << std::endl;
-
-        int tex_width, tex_height, tex_channels;
-        stbi_uc *pixels = stbi_load((TEXTURE_PATH + mat.diffuse_texname).c_str(), &tex_width, &tex_height,
-                                    &tex_channels, STBI_rgb_alpha);
-        const VkDeviceSize img_size = tex_width * tex_height * 4;
-
-        if (!pixels)
-            throw std::runtime_error("failed to load texture image.");
-
-        VCW_Buffer staging_buf = create_buf(img_size, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        cp_data_to_buf(&staging_buf, pixels);
-
-        stbi_image_free(pixels);
-
-        const VkExtent2D extent = {static_cast<uint32_t>(tex_width), static_cast<uint32_t>(tex_height)};
-        VCW_Image tex_img = create_img(extent, VK_FORMAT_R8G8B8A8_SRGB,
-                                       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-                                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
-
-        VkCommandBuffer cmd_buf = begin_single_time_cmd();
-        transition_img_layout(cmd_buf, &tex_img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                              VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-                              VK_PIPELINE_STAGE_TRANSFER_BIT);
-        cp_buf_to_img(cmd_buf, staging_buf, tex_img, extent);
-        transition_img_layout(cmd_buf, &tex_img, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-                              VK_PIPELINE_STAGE_TRANSFER_BIT,
-                              VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT);
-        end_single_time_cmd(cmd_buf);
-
-        create_img_view(&tex_img, VK_IMAGE_ASPECT_COLOR_BIT);
-
-        clean_up_buf(staging_buf);
-
-        textures.push_back(tex_img);
-    }
-    std::cout << "loaded textures: " << textures.size() << std::endl;
-}
-
-void App::create_textures_sampler() {
-    sampler = create_sampler(VK_FILTER_LINEAR, VK_SAMPLER_ADDRESS_MODE_REPEAT);
-}
-
-void App::create_unif_bufs() {
+void App::create_unif_buf() {
     ubo.chunk_res = glm::vec4(glm::vec3(static_cast<float>(params.chunk_res)), 0);
 
     VkDeviceSize buf_size = sizeof(VCW_Uniform);
-    unif_bufs.resize(MAX_FRAMES_IN_FLIGHT);
+    unif_buf = create_buf(buf_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                          VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        unif_bufs[i] = create_buf(buf_size, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                                  VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-
-        map_buf(&unif_bufs[i]);
-    }
+    cp_data_to_buf(&unif_buf, &ubo);
 }
 
 void App::create_render_target() {
@@ -315,30 +252,6 @@ void App::create_desc_pool_layout() {
     bindings.push_back(uniform_layout_binding);
     last_binding++;
 
-    // sampler layout binding must always be created
-    // otherwise shader recompilation would be required
-    VkDescriptorSetLayoutBinding sampler_layout_binding{};
-    sampler_layout_binding.binding = last_binding;
-    sampler_layout_binding.descriptorCount = 1;
-    sampler_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER;
-    sampler_layout_binding.pImmutableSamplers = nullptr;
-    sampler_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    bindings.push_back(sampler_layout_binding);
-    last_binding++;
-
-    // texture layout binding must always be created
-    // otherwise shader recompilation would be required
-    VkDescriptorSetLayoutBinding textures_layout_binding{};
-    textures_layout_binding.binding = last_binding;
-    if (textures.size() > DESCRIPTOR_TEXTURE_COUNT)
-        throw std::runtime_error("allowed texture count to small to fit all textures.");
-    textures_layout_binding.descriptorCount = DESCRIPTOR_TEXTURE_COUNT;
-    textures_layout_binding.descriptorType = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-    textures_layout_binding.pImmutableSamplers = nullptr;
-    textures_layout_binding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-    bindings.push_back(textures_layout_binding);
-    last_binding++;
-
     VkDescriptorSetLayoutBinding render_target_layout_binding{};
     render_target_layout_binding.binding = last_binding;
     render_target_layout_binding.descriptorCount = 1;
@@ -353,8 +266,6 @@ void App::create_desc_pool_layout() {
     }
 
     add_pool_size(MAX_FRAMES_IN_FLIGHT, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-    add_pool_size(MAX_FRAMES_IN_FLIGHT, VK_DESCRIPTOR_TYPE_SAMPLER);
-    add_pool_size(MAX_FRAMES_IN_FLIGHT * DESCRIPTOR_TEXTURE_COUNT, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
     add_pool_size(MAX_FRAMES_IN_FLIGHT, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE);
 }
 
@@ -499,17 +410,8 @@ void App::create_pipe() {
 
 void App::write_desc_pool() const {
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        write_buf_desc_binding(unif_bufs[i], static_cast<uint32_t>(i), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
-
-        if (params.load_textures) {
-            write_sampler_desc_binding(sampler, static_cast<uint32_t>(i), 1);
-
-            if (!textures.empty()) {
-                write_img_desc_array(textures, static_cast<uint32_t>(i), 2, VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE);
-            }
-        }
-
-        write_img_desc_binding(render_target, static_cast<uint32_t>(i), 3, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+        write_buf_desc_binding(unif_buf, static_cast<uint32_t>(i), 0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER);
+        write_img_desc_binding(render_target, static_cast<uint32_t>(i), 1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                VK_IMAGE_LAYOUT_GENERAL);
     }
 }
@@ -586,7 +488,7 @@ void App::record_cmd_buf(VkCommandBuffer cmd_buf) {
 
 void App::comp_vox_grid() {
     std::cout << std::endl << "--- Voxelization ---" << std::endl;
-    chunk_module.init(min_vert_coord, max_vert_coord);
+    chunk_module.init(min_vert_coord, max_vert_coord, static_cast<float>(params.chunk_res));
 
     std::vector<uint8_t> cached_output(params.chunk_size);
     std::cout << "render extent: " << render_extent.width << "x" << render_extent.height << std::endl;
@@ -597,9 +499,6 @@ void App::comp_vox_grid() {
 
     write_empty_bvox("output.bvox", header);
 
-    for (const auto &unif_buf: unif_bufs)
-        memcpy(unif_buf.p_mapped_mem, &ubo, sizeof(ubo));
-
     auto start_time = std::chrono::high_resolution_clock::now();
     render();
     auto end_time = std::chrono::high_resolution_clock::now();
@@ -609,12 +508,7 @@ void App::comp_vox_grid() {
     start_time = std::chrono::high_resolution_clock::now();
     cp_data_from_buf(&transfer_buf, cached_output.data());
 
-    uint32_t vox_count = 0;
-    for (uint32_t l = 0; l < params.chunk_size; l++) {
-        if (cached_output[l] > 0) {
-            vox_count++;
-        }
-    }
+    int vox_count = std::count_if(cached_output.begin(), cached_output.end(), [](int x) { return x > 0; });
 
     end_time = std::chrono::high_resolution_clock::now();
     auto copy_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
@@ -637,18 +531,9 @@ void App::clean_up() {
     clean_up_pipe();
     clean_up_desc();
 
-    for (const auto buf: unif_bufs)
-        clean_up_buf(buf);
-
-    if (params.load_textures) {
-        for (const auto texture: textures)
-            clean_up_img(texture);
-
-        vkDestroySampler(dev, sampler, nullptr);
-    }
+    clean_up_buf(unif_buf);
 
     clean_up_buf(transfer_buf);
-
     clean_up_img(render_target);
 
     vkDestroyFramebuffer(dev, frame_buf, nullptr);

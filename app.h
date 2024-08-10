@@ -99,14 +99,14 @@ struct VCW_Image {
 struct VCW_OrthographicChunkModule {
     glm::mat4 proj;
 
-    void init(const glm::vec3 min_coord, const glm::vec3 max_coord) {
+    void init(const glm::vec3 min_coord, const glm::vec3 max_coord, float chunk_res) {
         glm::vec3 dim = max_coord - min_coord;
         glm::vec3 center = (min_coord + max_coord) / 2.0f;
 
         float max_dim = glm::max(dim.x, glm::max(dim.y, dim.z));
 
         // scaling
-        float scale_factor = 256.0f / max_dim;
+        float scale_factor = chunk_res / max_dim;
         glm::vec3 scale = glm::vec3(scale_factor);
         scale.z *= 2.f;
 
@@ -117,9 +117,9 @@ struct VCW_OrthographicChunkModule {
 
         // create orthographic projection
         glm::mat4 ortho_proj = glm::ortho(
-                -128.0f, 128.0f, // left, right
-                -128.0f, 128.0f, // bottom, top
-                0.f, 256.0f  // near, far
+                -chunk_res * .5f, chunk_res * .5f, // left, right
+                -chunk_res * .5f, chunk_res * .5f, // bottom, top
+                0.f, chunk_res // near, far
         );
 
         // combine orthographic and model matrix
@@ -131,7 +131,13 @@ struct VoxelizeParams {
     uint32_t chunk_res;
     uint32_t chunk_size;
 
-    bool load_textures;
+    std::string input_file;
+    std::string output_file;
+
+    std::string material_dir;
+
+    bool run_length_encode;
+    bool morton_encode;
 };
 
 class App {
@@ -175,21 +181,15 @@ public:
     VkCommandPool cmd_pool;
     std::vector<VkCommandBuffer> cmd_bufs;
 
-    VCW_Image depth_img;
-
     tinyobj::attrib_t attrib;
     std::vector<tinyobj::shape_t> shapes;
     std::vector<tinyobj::material_t> materials;
-
-    VkSampler sampler;
-    std::vector<VCW_Image> textures;
 
     std::vector<Vertex> vertices;
     VCW_Buffer vert_buf;
     glm::vec3 min_vert_coord;
     glm::vec3 max_vert_coord;
     glm::vec3 dim;
-    float model_scale;
 
     std::vector<uint32_t> indices;
     int indices_count;
@@ -198,13 +198,10 @@ public:
     VCW_Image render_target;
     VCW_Buffer transfer_buf;
 
-    VkQueryPool query_pool;
-    uint32_t frame_query_count;
-
     VCW_PushConstants push_const;
 
     VCW_Uniform ubo;
-    std::vector<VCW_Buffer> unif_bufs;
+    VCW_Buffer unif_buf;
 
     std::vector<VkFence> fens;
 
@@ -398,7 +395,7 @@ public:
 
     void create_index_buf();
 
-    void create_unif_bufs();
+    void create_unif_buf();
 
     void create_textures_sampler();
 
