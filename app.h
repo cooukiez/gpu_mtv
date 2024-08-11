@@ -99,7 +99,7 @@ struct VCW_Image {
 struct VCW_OrthographicChunkModule {
     glm::mat4 proj;
 
-    void init(const glm::vec3 min_coord, const glm::vec3 max_coord, float chunk_res) {
+    void init(const glm::vec3 min_coord, const glm::vec3 max_coord, const float chunk_res) {
         glm::vec3 dim = max_coord - min_coord;
         glm::vec3 center = (min_coord + max_coord) / 2.0f;
 

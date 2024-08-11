@@ -12,7 +12,7 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 
 
-#define MODEL_INDEX 3
+#define MODEL_INDEX 0
 
 #if MODEL_INDEX == 0
 #define MODEL_PATH "models/armadillo/armadillo.obj"

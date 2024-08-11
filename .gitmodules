@@ -1,3 +1,6 @@
 [submodule "vss"]
 	path = vss
 	url = https://github.com/cooukiez/vss
+[submodule "models"]
+	path = models
+	url = https://github.com/cooukiez/3d_test_models.git

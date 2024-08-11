@@ -12,8 +12,8 @@
 #define APP_NAME "mesh to voxel converter"
 #define ENGINE_NAME "No Engine"
 
-// #define VERBOSE
-// #define VALIDATION
+#define VERBOSE
+#define VALIDATION
 
 // set max allowed textures
 #define DESCRIPTOR_TEXTURE_COUNT 32
