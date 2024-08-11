@@ -500,13 +500,17 @@ void App::comp_vox_grid() {
     header.morton_encoded = params.morton_encode;
 
     write_empty_bvox(params.output_file, header);
-
+    //
+    // rendering / voxelization
+    //
     auto start_time = std::chrono::high_resolution_clock::now();
     render();
     auto end_time = std::chrono::high_resolution_clock::now();
     auto voxelization_duration = std::chrono::duration_cast<std::chrono::microseconds>(end_time - start_time);
     double voxelization_time = static_cast<double>(voxelization_duration.count()) / 1000.0;
-
+    //
+    // copying data to cached output
+    //
     start_time = std::chrono::high_resolution_clock::now();
     cp_data_from_buf(&transfer_buf, cached_output.data());
 
@@ -514,9 +518,44 @@ void App::comp_vox_grid() {
 
     end_time = std::chrono::high_resolution_clock::now();
     auto copy_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
-
+    //
+    // morton encoding
+    //
     start_time = std::chrono::high_resolution_clock::now();
-    append_to_bvox("output.bvox", cached_output);
+
+    std::vector<uint8_t> morton_encoded(params.chunk_size);
+    if (params.morton_encode || params.generate_svo)
+        morton_encode_3d_grid(cached_output.data(), params.chunk_res, params.chunk_size, morton_encoded.data());
+
+
+    end_time = std::chrono::high_resolution_clock::now();
+    auto morton_encode_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    //
+    // generating svo
+    //
+    start_time = std::chrono::high_resolution_clock::now();
+    BsvoHeader bsvo_header{};
+    bsvo_header.max_depth = params.max_depth;
+    bsvo_header.root_res = params.chunk_res;
+
+    Svo svo{};
+    if (params.generate_svo)
+        svo = Svo(morton_encoded, bsvo_header.root_res, bsvo_header.max_depth);
+    end_time = std::chrono::high_resolution_clock::now();
+    auto svo_gen_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    //
+    // writing data
+    //
+    start_time = std::chrono::high_resolution_clock::now();
+
+    if (params.morton_encode)
+        append_to_bvox("output.bvox", morton_encoded);
+    else
+        append_to_bvox("output.bvox", cached_output);
+
+    if (params.generate_svo)
+        write_bsvo(params.svo_file, svo, bsvo_header);
+
     end_time = std::chrono::high_resolution_clock::now();
     auto write_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
 
@@ -525,6 +564,10 @@ void App::comp_vox_grid() {
     std::cout << std::endl << "--- Results ---" << std::endl;
     std::cout << "voxelization time: " << voxelization_time << "ms" << std::endl;
     std::cout << "copy time: " << copy_duration.count() << "ms" << std::endl;
+    if (params.morton_encode || params.generate_svo)
+        std::cout << "morton encode time: " << morton_encode_duration.count() << "ms" << std::endl;
+    if (params.generate_svo)
+        std::cout << "svo generation time: " << svo_gen_duration.count() << "ms" << std::endl;
     std::cout << "write time: " << write_duration.count() << "ms" << std::endl;
     std::cout << "voxel count: " << vox_count << std::endl;
 }

@@ -17,6 +17,9 @@ void print_usage() {
     std::cout << "  -c <method>      Compression method, available: [rle]" << std::endl;
     std::cout << "  -z <path>        Specify folder with the materials. (the corresponding .mtl file)" << std::endl;
     std::cout << "                   Defaults to the directory of the .obj file." << std::endl;
+    std::cout << "  -s <file>        Additionally generate sparse voxel octree." << std::endl;
+    std::cout << "  -d <depth>       Specify max depth for the svo." << std::endl;
+    std::cout << "                   Defaults to a depth of " << DEFAULT_MAX_DEPTH << "." << std::endl;
     std::cout << std::endl;
     std::cout << "Currently unsupported, will be added later." << std::endl;
     std::cout << "  -t               Use textures and generate color palette." << std::endl;
@@ -44,7 +47,7 @@ int evaluate_args(std::string &arg, std::string &next_arg, VoxelizeParams *p_par
     } else if (arg == "-c") {
         if (next_arg == "rle") {
             p_params->run_length_encode = true;
-            return ARG_VALID;
+            return NEXT_ARG_USED;
         } else {
             return ARG_INVALID;
         }
@@ -83,6 +86,14 @@ int evaluate_args(std::string &arg, std::string &next_arg, VoxelizeParams *p_par
     } else if (arg == "-o") {
         p_params->output_file = next_arg;
         return NEXT_ARG_USED;
+    } else if (arg == "-s") {
+        p_params->generate_svo = true;
+        p_params->svo_file = next_arg;
+        // necessary for svo generation
+        p_params->morton_encode = true;
+        return NEXT_ARG_USED;
+    } else if (arg == "-d") {
+        return string_to_int(next_arg, &p_params->max_depth) == EXIT_SUCCESS ? NEXT_ARG_USED : ARG_INVALID;
     } else {
         return ARG_INVALID;
     }
@@ -147,6 +158,8 @@ int main(int argc, char *argv[]) {
     if (params.chunk_res == 0)
         params.chunk_res = 256;
     params.chunk_size = static_cast<uint32_t>(pow(params.chunk_res, 3));
+    if (params.max_depth == 0)
+        params.max_depth = DEFAULT_MAX_DEPTH;
 
     if (validate_args(&params) == ARG_INVALID) {
         print_usage();

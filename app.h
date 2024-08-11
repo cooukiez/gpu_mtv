@@ -138,6 +138,10 @@ struct VoxelizeParams {
 
     bool run_length_encode;
     bool morton_encode;
+
+    bool generate_svo;
+    uint32_t max_depth;
+    std::string svo_file;
 };
 
 class App {
