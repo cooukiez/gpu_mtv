@@ -144,9 +144,6 @@ class App {
 public:
     VoxelizeParams params;
 
-    App(VoxelizeParams params) : params(params) {
-    }
-
     void run() {
         load_model();
         init_app();

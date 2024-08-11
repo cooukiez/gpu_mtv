@@ -27,18 +27,10 @@ int string_to_int(std::string &string, uint32_t *p_int) {
     try {
         *p_int = static_cast<uint32_t>(std::stoul(string));
         return EXIT_SUCCESS;
-    } catch (const std::invalid_argument &e) {
-        std::cerr << std::endl << "invalid argument: " << string << std::endl;
-        return EXIT_FAILURE;
-    } catch (const std::out_of_range &e) {
-        std::cerr << std::endl << "out of range: " << string << std::endl;
+    } catch (const std::exception &e) {
+        std::cerr << std::endl << e.what() << std::endl;
         return EXIT_FAILURE;
     }
-}
-
-bool exists_path(const std::string &path) {
-    std::filesystem::path p(path);
-    return std::filesystem::exists(p);
 }
 
 int evaluate_args(std::string &arg, std::string &next_arg, VoxelizeParams *p_params) {
@@ -57,20 +49,26 @@ int evaluate_args(std::string &arg, std::string &next_arg, VoxelizeParams *p_par
             return ARG_INVALID;
         }
     } else if (arg == "-z") {
-        if (exists_path(next_arg)) {
-            p_params->material_dir = next_arg;
-            return NEXT_ARG_USED;
+        std::filesystem::path path(next_arg);
+        if (std::filesystem::exists(path)) {
+            if (std::filesystem::is_directory(path)) {
+                p_params->material_dir = next_arg;
+                return NEXT_ARG_USED;
+            } else {
+                std::cerr << std::endl << "specified material dir is not a directory." << std::endl;
+                return ARG_INVALID;
+            }
         } else {
             std::cerr << std::endl << "specified material dir does not exist." << std::endl;
             return ARG_INVALID;
         }
     } else if (arg == "-i") {
-        if (exists_path(next_arg)) {
-            std::filesystem::path path(next_arg);
+        std::filesystem::path path(next_arg);
+
+        if (std::filesystem::exists(path)) {
             if (path.extension() == ".obj") {
-                if (p_params->material_dir == "") {
+                if (p_params->material_dir == "")
                     p_params->material_dir = path.parent_path().string();
-                }
 
                 p_params->input_file = next_arg;
                 return NEXT_ARG_USED;
@@ -162,7 +160,8 @@ int main(int argc, char *argv[]) {
     std::cout << "#        Voxelization        #" << std::endl;
     std::cout << "##############################" << std::endl;
 
-    App app(params);
+    App app{};
+    app.params = params;
 
     try {
         app.run();

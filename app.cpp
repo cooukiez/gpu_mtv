@@ -67,7 +67,7 @@
 void App::load_model() {
     std::cout << std::endl << "--- Model loading ---" << std::endl;
     std::string warn, err;
-    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, MODEL_PATH, TEXTURE_PATH))
+    if (!tinyobj::LoadObj(&attrib, &shapes, &materials, &warn, &err, params.input_file.c_str(), params.material_dir.c_str()))
         throw std::runtime_error(err);
     if (!warn.empty())
         std::cout << warn << std::endl;
@@ -496,8 +496,10 @@ void App::comp_vox_grid() {
     BvoxHeader header{};
     header.chunk_res = params.chunk_res;
     header.chunk_size = params.chunk_size;
+    header.run_length_encoded = params.run_length_encode;
+    header.morton_encoded = params.morton_encode;
 
-    write_empty_bvox("output.bvox", header);
+    write_empty_bvox(params.output_file, header);
 
     auto start_time = std::chrono::high_resolution_clock::now();
     render();
@@ -508,7 +510,7 @@ void App::comp_vox_grid() {
     start_time = std::chrono::high_resolution_clock::now();
     cp_data_from_buf(&transfer_buf, cached_output.data());
 
-    int vox_count = std::count_if(cached_output.begin(), cached_output.end(), [](int x) { return x > 0; });
+    auto vox_count = std::count_if(cached_output.begin(), cached_output.end(), [](int x) { return x > 0; });
 
     end_time = std::chrono::high_resolution_clock::now();
     auto copy_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
