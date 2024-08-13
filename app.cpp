@@ -527,7 +527,6 @@ void App::comp_vox_grid() {
     if (params.morton_encode || params.generate_svo)
         morton_encode_3d_grid(cached_output.data(), params.chunk_res, params.chunk_size, morton_encoded.data());
 
-
     end_time = std::chrono::high_resolution_clock::now();
     auto morton_encode_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     //
@@ -549,9 +548,9 @@ void App::comp_vox_grid() {
     start_time = std::chrono::high_resolution_clock::now();
 
     if (params.morton_encode)
-        append_to_bvox("output.bvox", morton_encoded);
+        append_to_bvox(params.output_file, morton_encoded);
     else
-        append_to_bvox("output.bvox", cached_output);
+        append_to_bvox(params.output_file, cached_output);
 
     if (params.generate_svo)
         write_bsvo(params.svo_file, svo, bsvo_header);

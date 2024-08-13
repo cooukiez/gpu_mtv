@@ -89,8 +89,6 @@ int evaluate_args(std::string &arg, std::string &next_arg, VoxelizeParams *p_par
     } else if (arg == "-s") {
         p_params->generate_svo = true;
         p_params->svo_file = next_arg;
-        // necessary for svo generation
-        p_params->morton_encode = true;
         return NEXT_ARG_USED;
     } else if (arg == "-d") {
         return string_to_int(next_arg, &p_params->max_depth) == EXIT_SUCCESS ? NEXT_ARG_USED : ARG_INVALID;
