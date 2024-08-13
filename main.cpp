@@ -128,6 +128,9 @@ void print_params(VoxelizeParams p_params) {
 
     std::cout << "morton encode: " << p_params.morton_encode << std::endl;
     std::cout << "run length encode: " << p_params.run_length_encode << std::endl;
+
+    std::cout << "generate svo: " << p_params.generate_svo << std::endl;
+    std::cout << "svo file: " << p_params.svo_file << std::endl;
 }
 
 int main(int argc, char *argv[]) {
